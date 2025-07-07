@@ -47,7 +47,7 @@ class FeatureEngineer:
         district_name = row.get('Thành phố/Quận/Huyện/Thị xã')
 
         if not location_cate or not isinstance(district_name, str):
-            return "Kém"  # Default to 'Kém' if essential data is missing
+            return "Kém"
 
         is_quan = "quận" in district_name.lower()
         is_huyen = not is_quan

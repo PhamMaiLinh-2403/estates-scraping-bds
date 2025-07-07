@@ -22,12 +22,12 @@ SELENIUM_CONFIG = {
 }
 
 # Concurrency settings
-MAX_WORKERS = 2  # Number of parallel threads for scraping details
+MAX_WORKERS = 1  # Number of parallel threads for scraping details
 
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": False,
     "start_index": 0,
-    "count": 2000,
+    "count": 50,
     "stagger_mode": "random",
     "stagger_step_sec": 2.0,
     "stagger_max_sec": 3.0,
@@ -201,3 +201,6 @@ QUALITY_LEVELS = [
 ]
 
 DEFAULT_QUALITY = 0.75
+
+STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ")
+DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ")

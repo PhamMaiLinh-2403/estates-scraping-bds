@@ -118,17 +118,19 @@ class Scraper:
                 "latitude": coordinates.get("latitude"),
                 "longitude": coordinates.get("longitude"),
                 "short_address": self._get_text(self.driver, '.re__pr-short-description'),
-                "address_parts": self._scrape_address_parts(),
-                "main_info": self._scrape_info_items(body),
+
+                # Convert these Python objects to valid JSON strings
+                "address_parts": json.dumps(self._scrape_address_parts(), ensure_ascii=False),
+                "main_info": json.dumps(self._scrape_info_items(body), ensure_ascii=False),
                 "description": self._get_text(body, '.re__detail-content'),
-                "other_info": self._scrape_other_info(body),
-                "image_urls": self._scrape_og_images(),
+                "other_info": json.dumps(self._scrape_other_info(body), ensure_ascii=False),
+                "image_urls": json.dumps(self._scrape_og_images(), ensure_ascii=False),
             }
+
             return listing_data
         except (TimeoutException, Exception) as e:
             print(f"Attempt failed for {url}: {e}")
             raise e
-
 
     def _scrape_lat_long(self) -> dict:
         """

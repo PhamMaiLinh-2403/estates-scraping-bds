@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import json
 import re
 from typing import Any, Dict, List, Optional
@@ -15,6 +14,8 @@ from src.config import (
     FEATURE_KEYWORDS,
     QUALITY_LEVELS,
     SHAPE_KEYWORDS,
+    STREET_PREFIXES,
+    DETAIL_PREFIXES
 )
 
 __all__ = [
@@ -115,7 +116,8 @@ class DataCleaner:
             first = parts[0]
             non_prefixes = (
                 "phường", "xã", "dự án", "quận",
-                "huyện", "thị trấn", "số"
+                "huyện", "thị trấn", "số", "thôn",
+                "xóm"
             )
             # Filter for cases with no explicit prefix
             if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first):
@@ -124,13 +126,13 @@ class DataCleaner:
         parts_raw = str(row.get("address_parts", "")).strip()
         if parts_raw:
             try:
-                addr_list = ast.literal_eval(parts_raw)
+                addr_list = json.loads(parts_raw)
                 if addr_list:
                     last_item = addr_list[-1]
                     m = re.search(r"tại (đường|phố)\s+([^,]+)", last_item, re.IGNORECASE)
                     if m:
                         return f"{m.group(1).capitalize()} {m.group(2).strip()}"
-            except (ValueError, SyntaxError):
+            except (json.JSONDecodeError, ValueError, SyntaxError):
                 pass
 
         title = str(row.get("title", "")).strip()
@@ -145,38 +147,41 @@ class DataCleaner:
     @staticmethod
     def extract_address_detail(row: Dict[str, Any]) -> str:
         """
-        Extracts specific address details.
+        Extracts specific address details like house/alley numbers.
         If not available, determine if it's 'Mặt phố' or 'Mặt ngõ'.
         """
-        # Step 1: Extract specific address from 'short_address'
+
+        # --- Step 1: Analyze 'short_address' with improved logic ---
         short_address = str(row.get("short_address", ""))
         if short_address:
             parts = [p.strip() for p in short_address.split(',')]
-            detail_parts = []
-            detail_keywords = ("số", "ngõ", "hẻm", "kiệt", "sn", "hxh", "no.")
 
-            # Check the first part of the address for specific details
-            first_part_lower = parts[0].lower()
-            has_digit = any(char.isdigit() for char in first_part_lower)
-            is_keyword_start = any(first_part_lower.startswith(kw) for kw in detail_keywords)
+            if parts:
+                first_part_lower = parts[0].lower()
+                is_street = first_part_lower.startswith(STREET_PREFIXES)
 
-            if has_digit or is_keyword_start:
-                # Capture consecutive parts that seem to be part of the specific address
-                for part in parts:
-                    part_lower = part.lower()
-                    if any(part_lower.startswith(kw) for kw in detail_keywords) or any(char.isdigit() for char in part):
-                        detail_parts.append(part)
-                    else:
-                        break
-                if detail_parts:
-                    return ", ".join(detail_parts)
+                if not is_street:
+                    is_detail_prefix = first_part_lower.startswith(DETAIL_PREFIXES)
+                    has_digit = any(char.isdigit() for char in first_part_lower)
 
-        # Step 2: Check for "Mặt phố" in title or description
+                    if is_detail_prefix or has_digit:
+                        detail_parts = []
+                        for part in parts:
+                            part_lower = part.lower()
+                            if part_lower.startswith(DETAIL_PREFIXES) or any(char.isdigit() for char in part):
+                                detail_parts.append(part)
+                            else:
+                                break
+
+                        if detail_parts:
+                            return ", ".join(detail_parts)
+
+        # --- Step 2: Fallback to searching text for "Mặt phố" or "Mặt đường" ---
         text_to_search = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        if re.search(r'\bmặt\s+phố\b', text_to_search):
+        if re.search(r'\b(mặt\s+phố|mặt\s+đường)\b', text_to_search):
             return "Mặt phố"
 
-        # Step 3: Default to "Mặt ngõ"
+        # --- Step 3: Default to "Mặt ngõ" if no other information is found ---
         return "Mặt ngõ"
 
     # ----- Datetime & pricing -----
