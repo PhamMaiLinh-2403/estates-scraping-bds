@@ -56,6 +56,7 @@ FINAL_COLUMNS = [
     'Thời điểm giao dịch/rao bán',
     'Thông tin liên hệ',
     'Giá rao bán/giao dịch',
+    'Giá ước tính',
     'Loại đơn giá (đ/m2 hoặc đ/m ngang)',
     'Đơn giá đất',
     'Lợi thế kinh doanh',
@@ -78,7 +79,8 @@ FINAL_COLUMNS = [
 ]
 
 
-# JSON dicts for cleaning task
+# --- JSON dicts for cleaning task ---
+
 # Land shape dict: from the most specific shape to the most general shape
 SHAPE_KEYWORDS = {
     # Specific, highly desirable/undesirable features are checked first.
@@ -104,7 +106,7 @@ SHAPE_KEYWORDS = {
     # Most common/default shape, checked last.
     'Chữ nhật': [
         'vuông vức', 'vuông vắn', 'vuông đẹp',
-        'vuông như', 'hình chữ nhật'
+        'vuông như', 'hình chữ nhật', 'đều chằn chặn'
     ]
 }
 

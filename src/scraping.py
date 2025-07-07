@@ -103,13 +103,13 @@ class Scraper:
         Scrapes detailed information from a single property listing page.
         """
         try:
+            # Wait until the main body appears
             self.driver.get(url)
             WebDriverWait(self.driver, 15).until(
                 EC.presence_of_element_located((By.ID, 'product-detail-web'))
             )
             body = self.driver.find_element(By.ID, 'product-detail-web')
 
-            # Scrape coordinates from script tags
             coordinates = self._scrape_lat_long()
 
             listing_data = {
@@ -204,12 +204,10 @@ class Scraper:
 
         # Fallback method: Scrape JSON-LD schema
         script_tags = self.driver.find_elements(By.CSS_SELECTOR, 'script[type="application/ld+json"]')
-
         for script_tag in script_tags:
             try:
                 json_text = script_tag.get_attribute('innerHTML')
                 data = json.loads(json_text)
-
                 if data.get('@type') == 'BreadcrumbList':
                     return [item['name'] for item in data.get('itemListElement', []) if 'name' in item]
             except (json.JSONDecodeError, TypeError):

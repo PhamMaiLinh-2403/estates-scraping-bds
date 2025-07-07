@@ -4,7 +4,6 @@ import ast
 import json
 import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
@@ -32,8 +31,8 @@ class DataCleaner:
     @staticmethod
     def _parse_and_clean_number(text_value: Any) -> Optional[float]:
         """
-        Extract the first numeric token from text_value and return as ``float``.
-        Handles decimal commas and trailing ``m`` / ``m2`` units.
+        Extract the first numeric token from text_value and return as float.
+        Handles decimal commas and trailing m / m2 units.
         """
         if not isinstance(text_value, str):
             return None
@@ -109,15 +108,16 @@ class DataCleaner:
         if short_address:
             parts = [p.strip() for p in short_address.split(",")]
             for part in parts:
+                # Filter for cases with explicit prefixes "đường", "phố"
                 if part.lower().startswith(("đường ", "phố ")):
                     return part
 
             first = parts[0]
             non_prefixes = (
                 "phường", "xã", "dự án", "quận",
-                "huyện", "thị trấn", "số", "ngõ",
-                "hẻm", "kiệt",
+                "huyện", "thị trấn", "số"
             )
+            # Filter for cases with no explicit prefix
             if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first):
                 return first
 
@@ -127,7 +127,7 @@ class DataCleaner:
                 addr_list = ast.literal_eval(parts_raw)
                 if addr_list:
                     last_item = addr_list[-1]
-                    m = re.search(r"tại (đường|phố)\s+(.*)", last_item, re.IGNORECASE)
+                    m = re.search(r"tại (đường|phố)\s+([^,]+)", last_item, re.IGNORECASE)
                     if m:
                         return f"{m.group(1).capitalize()} {m.group(2).strip()}"
             except (ValueError, SyntaxError):
@@ -237,12 +237,14 @@ class DataCleaner:
         if pd.notna(row.get("description")):
             text = str(row["description"])
             patterns = [r"(?i)(?:diện tích|dt)[:\s]*([\d\.,]+)\s*m[²2]", r"([\d\.,]+)\s*m[²2]"]
+
             for p in patterns:
                 m = re.search(p, text)
                 if m:
                     area = DataCleaner._parse_and_clean_number(m.group(1))
                     if pd.notna(area):
                         return area
+
         return np.nan
 
     @staticmethod
@@ -280,7 +282,7 @@ class DataCleaner:
         potential_numbers = {
             int(n)
             for n in re.findall(r"(?:cải\s+tạo\s+lên|xây\s+lên|nâng\s+tầng\s+lên|xin\s+phép\s+xây)\s*(\d+)", text)
-        }
+        } # For filtering out potential numbers of a building, since we only care about actual number
         candidate_numbers: List[int] = []
 
         for num_str in re.findall(rf"(\d+|{num_words_pattern})\s*(?:tầng|lầu|tấm|mê)", text):
@@ -336,10 +338,12 @@ class DataCleaner:
     @staticmethod
     def estimate_remaining_quality(row: Dict[str, Any]) -> float:
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+
         for quality_val, keywords in QUALITY_LEVELS:
             for kw in keywords:
                 if re.search(rf"\b{re.escape(kw)}\b", text):
                     return quality_val
+
         return DEFAULT_QUALITY
 
     # ----- Land morphology & frontage -----
@@ -395,14 +399,12 @@ class DataCleaner:
 
             if val:
                 m = re.search(r"\d+", str(val))
-
                 if m:
                     return int(m.group(0))
         except (json.JSONDecodeError, TypeError):
             pass
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-
         for pattern, val in FACADE_COUNT_MAP:
             if re.search(pattern, text):
                 return val
@@ -416,12 +418,10 @@ class DataCleaner:
 
             text_l = text.lower()
             m = re.search(r"(?:dài|chiều\s+dài)\s*:?\s*([\d.,m]+)", text_l)
-
             if m:
                 return DataCleaner._parse_and_clean_number(m.group(1))
 
             m = re.search(r"(\d+[\.,m]?\d*)\s*(?:m|mét)?\s*[xX*]\s*(\d+[\.,m]?\d*)", text_l)
-
             if m:
                 nums = [DataCleaner._parse_and_clean_number(n) for n in m.groups()]
                 if all(n is not None for n in nums):
@@ -431,14 +431,13 @@ class DataCleaner:
         try:
             val = json.loads(row.get("other_info", "{}") or "{}").get("Chiều dài")
             length = DataCleaner._parse_and_clean_number(val)
-
             if length:
                 return length
         except (json.JSONDecodeError, TypeError):
             pass
+
         for field in (row.get("description"), row.get("title")):
             length = _find(str(field))
-
             if length:
                 return length
         return None
@@ -450,17 +449,14 @@ class DataCleaner:
         try:
             val = json.loads(row.get("other_info", "{}") or "{}").get("Đường vào")
             w = DataCleaner._parse_and_clean_number(val)
-
             if w is not None:
                 widths.append(w)
         except (json.JSONDecodeError, TypeError):
             pass
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-
         for num_str in re.findall(r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|đường\s+trước\s+nhà)\s*:?\s*([\d.,m]+)", text):
             w = DataCleaner._parse_and_clean_number(num_str)
-
             if w is not None:
                 widths.append(w)
 
@@ -487,6 +483,7 @@ class DataCleaner:
 
         if not text:
             return None
+
         road_kw = r"(?:mặt\s+phố|đường\s+lớn|đường\s+chính|trục\s+chính|đường\s+ô\s*tô|phố)"
         dist_cap = r"(\d+[\.,]?\d*)\s*(m|mét|km)?"
         patt1 = rf"{road_kw}\s*(?:cách|khoảng)\s*{dist_cap}"

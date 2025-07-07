@@ -22,13 +22,13 @@ def save_urls_to_csv(urls, file_path):
         writer.writerow(["url"])
         writer.writerows([[u] for u in urls])
 
-    print(f"✅  Saved {len(urls)} URLs → {file_path}")
+    print(f"✅ Saved {len(urls)} URLs → {file_path}")
 
 
 def save_details_to_csv(details, file_path):
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     pd.DataFrame(details).to_csv(file_path, index=False, quoting=csv.QUOTE_ALL)
-    print(f"✅  Saved {len(details)} listing records → {file_path}")
+    print(f"✅ Saved {len(details)} listing records → {file_path}")
 
 
 # --- Worker & Concurrency ---
@@ -36,6 +36,7 @@ def chunks(iterable, n):
     iterable = list(iterable)
     k, m = divmod(len(iterable), n)
     start = 0
+
     for i in range(n):
         end = start + k + (1 if i < m else 0)
         yield iterable[start:end]
@@ -46,7 +47,7 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
     """Each worker gets its own driver & scraper."""
     base = config.SCRAPING_DETAILS_CONFIG.get("stagger_step_sec", 2.0)
     start_delay = worker_id * base
-    print(f"[Worker {worker_id}]  Sleeping {start_delay:.1f}s before start.")
+    print(f"[Worker {worker_id}]: Sleeping {start_delay:.1f}s before start.")
     time.sleep(start_delay)
 
     driver = create_stealth_driver(headless=config.SELENIUM_CONFIG["headless"])
@@ -121,7 +122,7 @@ def run_scrape_details():
 def run_cleaning_pipeline():
     """Step 3: Clean the raw data and structure it."""
     if not os.path.exists(config.DETAILS_OUTPUT_FILE):
-        print(f"🚫  Raw details file not found: {config.DETAILS_OUTPUT_FILE}. Run with `--mode details` first.")
+        print(f"🚫 Raw details file not found: {config.DETAILS_OUTPUT_FILE}. Run with `--mode details` first.")
         return
 
     print(f"Reading raw data from '{config.DETAILS_OUTPUT_FILE}'...")
@@ -165,7 +166,7 @@ def run_cleaning_pipeline():
         cleaned_records.append(processed_data)
 
     df_cleaned = pd.DataFrame(cleaned_records)
-    final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất']]
+    final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
     df_final = df_cleaned.reindex(columns=final_columns)
 
     df_final.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False, quoting=csv.QUOTE_ALL)
@@ -181,9 +182,7 @@ def run_feature_engineering():
     print(f"Reading cleaned data from '{config.CLEANED_DETAILS_OUTPUT_FILE}'...")
     df = pd.read_csv(config.CLEANED_DETAILS_OUTPUT_FILE)
 
-    print("Engineering new features...")
-
-    # Use .apply to generate the new columns
+    df['Giá ước tính'] = df.apply(lambda row: FeatureEngineer.calculate_estimated_price(row.to_dict()), axis=1)
     df['Lợi thế kinh doanh'] = df.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
     df['Đơn giá đất'] = df.apply(lambda row: FeatureEngineer.calculate_land_unit_price(row.to_dict()), axis=1)
 

@@ -12,7 +12,7 @@ class FeatureEngineer:
     def get_location_category(row: Dict[str, Any]) -> Optional[str]:
         """
         Determines the asset's position category (VT1-VT4) based on distance
-        to the main road and alley width, as per business logic.
+        to the main road and alley width.
         """
         distance = row.get('Khoảng cách tới trục đường chính (m)')
         alley_width = row.get('Độ rộng ngõ/ngách nhỏ nhất (m)')
@@ -59,8 +59,19 @@ class FeatureEngineer:
         if (location_cate == "VT2" and is_huyen) or (location_cate == "VT3"):
             return "Trung bình"
 
-        # All other cases, including VT4 and unclassified properties, are 'Kém'.
         return "Kém"
+
+    @staticmethod
+    def calculate_estimated_price(row):
+        """
+        Calculate the estimated price of the property.
+        """
+        total_price = row.get('Giá rao bán/giao dịch')
+
+        if not total_price:
+            return None
+
+        return round(total_price * 0.98, 2)
 
     @staticmethod
     def calculate_land_unit_price(row: Dict[str, Any]) -> Optional[float]:
