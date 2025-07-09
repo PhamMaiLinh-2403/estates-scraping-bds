@@ -19,17 +19,46 @@ def save_urls_to_csv(urls, file_path):
 
     with open(file_path, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        
         writer.writerow(["url"])
         writer.writerows([[u] for u in urls])
 
-    print(f"✅ Saved {len(urls)} URLs → {file_path}")
+    print(f"Saved {len(urls)} URLs → {file_path}")
 
 
 def save_details_to_csv(details, file_path):
+    """
+    Saves scraped details to a CSV file, supporting both overwrite and append modes.
+    The behavior is controlled by the `append_mode` setting in `config.py`.
+    """
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
-    pd.DataFrame(details).to_csv(file_path, index=False, quoting=csv.QUOTE_ALL)
-    print(f"✅ Saved {len(details)} listing records → {file_path}")
+
+    if not details:
+        print("No new details to save.")
+        return
+
+    # Check if file exists to determine if we need to write the header
+    file_exists = os.path.exists(file_path)
+
+    # Read the append_mode from config; default to False if not found
+    is_append_mode = config.SCRAPING_DETAILS_CONFIG.get("append_mode", False)
+
+    # Determine mode and header based on config and file existence
+    mode = 'a' if is_append_mode and file_exists else 'w'
+    write_header = not (is_append_mode and file_exists)
+
+    df = pd.DataFrame(details)
+    df.to_csv(
+        file_path,
+        mode=mode,
+        header=write_header,
+        index=False,
+        quoting=csv.QUOTE_ALL
+    )
+
+    if mode == 'a':
+        print(f"Appended {len(details)} new listing records → {file_path}")
+    else:
+        print(f"Saved {len(details)} listing records → {file_path}")
 
 
 # --- Worker & Concurrency ---
@@ -67,7 +96,7 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
                 config.SCRAPING_DETAILS_CONFIG["stagger_max_sec"],
             )
             time.sleep(delay)
-    driver.quit() 
+    driver.quit()
     return results
 
 
@@ -84,7 +113,7 @@ def run_scrape_urls():
 def run_scrape_details():
     """Step 2: Scrape detailed information for each URL."""
     if not os.path.exists(config.URLS_OUTPUT_FILE):
-        print("🚫  URL file not found. Run with `--mode urls` first.")
+        print("URL file not found. Run with `--mode urls` first.")
         return
 
     urls = pd.read_csv(config.URLS_OUTPUT_FILE)["url"].tolist()
@@ -123,7 +152,7 @@ def run_scrape_details():
 def run_cleaning_pipeline():
     """Step 3: Clean the raw data and structure it."""
     if not os.path.exists(config.DETAILS_OUTPUT_FILE):
-        print(f"🚫 Raw details file not found: {config.DETAILS_OUTPUT_FILE}. Run with `--mode details` first.")
+        print(f"Raw details file not found: {config.DETAILS_OUTPUT_FILE}. Run with `--mode details` first.")
         return
 
     print(f"Reading raw data from '{config.DETAILS_OUTPUT_FILE}'...")
@@ -171,13 +200,13 @@ def run_cleaning_pipeline():
     df_final = df_cleaned.reindex(columns=final_columns)
 
     df_final.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False, quoting=csv.QUOTE_ALL)
-    print(f"✅ Successfully cleaned and saved {len(df_final)} records to '{config.CLEANED_DETAILS_OUTPUT_FILE}'")
+    print(f"Successfully cleaned and saved {len(df_final)} records to '{config.CLEANED_DETAILS_OUTPUT_FILE}'")
 
 
 def run_feature_engineering():
     """Step 4: Engineer new features from the cleaned data."""
     if not os.path.exists(config.CLEANED_DETAILS_OUTPUT_FILE):
-        print(f"🚫 Cleaned data file not found: {config.CLEANED_DETAILS_OUTPUT_FILE}. Run with `--mode clean` first.")
+        print(f"Cleaned data file not found: {config.CLEANED_DETAILS_OUTPUT_FILE}. Run with `--mode clean` first.")
         return
 
     print(f"Reading cleaned data from '{config.CLEANED_DETAILS_OUTPUT_FILE}'...")
@@ -193,7 +222,7 @@ def run_feature_engineering():
     # Save the final result
     df_final.to_csv(config.FEATURE_ENGINEERED_OUTPUT_FILE, index=False, quoting=csv.QUOTE_ALL)
     print(
-        f"✅ Successfully engineered features and saved {len(df_final)} records to '{config.FEATURE_ENGINEERED_OUTPUT_FILE}'")
+        f"Successfully engineered features and saved {len(df_final)} records to '{config.FEATURE_ENGINEERED_OUTPUT_FILE}'")
 
 
 if __name__ == "__main__":
