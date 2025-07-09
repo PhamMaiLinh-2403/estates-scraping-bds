@@ -19,6 +19,7 @@ def save_urls_to_csv(urls, file_path):
 
     with open(file_path, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
+        
         writer.writerow(["url"])
         writer.writerows([[u] for u in urls])
 
