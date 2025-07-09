@@ -572,3 +572,24 @@ class DataCleaner:
                     found.add(sent.strip())
                     break
         return list(found)
+    
+    def extract_direct_features(row: Dict[str, Any]) -> List[str]:
+        direct = row['description']
+        direct_list = direct.split('\n')
+        new_version = []
+        for part in direct_list:
+            if 'liên hệ' in part.lower() or 'lh' in part.lower():
+                continue
+            elif '***' in part.lower():
+                continue
+            elif 'tỷ' in part.lower().split() or 'tr' in part.lower().split() or 'triệu' in part.lower().split() and 'thương lượng' not in part.lower() and 'tốt' not in part.lower().split():
+                continue
+            elif 'giá' in part.lower().split() and 'thương lượng' not in part.lower() and 'tốt' not in part.lower().split():
+                continue
+            elif 'xem nhà' in part.lower():
+                continue
+            else:
+                new_version.append(part)
+        # new_version = '\n'.join(new_version)
+        return new_version
+        
