@@ -22,7 +22,7 @@ SELENIUM_CONFIG = {
 }
 
 # Concurrency settings
-MAX_WORKERS = 1  # Number of parallel threads for scraping details
+MAX_WORKERS = 2  # Number of parallel threads for scraping details
 
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": False,
