@@ -120,7 +120,7 @@ class DataCleaner:
                 "xóm", 'hẻm', 'kiệt'
             )
             # Filter for cases with no explicit prefix
-            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first):
+            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first) and len(part.split()) <= 5:
                 return first
 
         parts_raw = str(row.get("address_parts", "")).strip()
