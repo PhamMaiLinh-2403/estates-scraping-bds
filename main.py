@@ -67,7 +67,7 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
                 config.SCRAPING_DETAILS_CONFIG["stagger_max_sec"],
             )
             time.sleep(delay)
-    driver.quit()
+    driver.quit() 
     return results
 
 
