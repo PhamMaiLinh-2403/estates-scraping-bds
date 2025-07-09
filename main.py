@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
-from src.cleaning import DataCleaner
+from src.cleaning import DataCleaner, drop_mixed_listings
 from src.feature_engineering import FeatureEngineer
 from src import config
 
@@ -157,7 +157,7 @@ def run_cleaning_pipeline():
 
     print(f"Reading raw data from '{config.DETAILS_OUTPUT_FILE}'...")
     df_raw = pd.read_csv(config.DETAILS_OUTPUT_FILE)
-    print(f"Processing {len(df_raw)} records...")
+    df_raw = drop_mixed_listings(df_raw)
 
     cleaned_records = []
     for _, row in df_raw.iterrows():

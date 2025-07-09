@@ -20,7 +20,36 @@ from src.config import (
 
 __all__ = [
     "DataCleaner",
+    'drop_mixed_listings'
 ]
+
+
+def drop_mixed_listings(df: pd.DataFrame):
+    """
+    Removes rows from the DataFrame where 'title' or 'description'
+    contain the keyword "thổ cư".
+    """
+    initial_count = len(df)
+
+    if 'title' not in df.columns or 'description' not in df.columns:
+        return df
+
+    # Create a combined text series for searching, handling NaNs
+    text_to_search = df['title'].fillna('') + ' ' + df['description'].fillna('')
+
+    # Create a boolean mask for rows containing "thổ cư" (case-insensitive)
+    mask = text_to_search.str.contains('thổ cư', case=False, na=False)
+
+    # Filter the DataFrame to keep only the rows where the mask is False
+    df_filtered = df[~mask]
+
+    final_count = len(df_filtered)
+    removed_count = initial_count - final_count
+
+    if removed_count > 0:
+        print(f"Removed {removed_count} listings containing 'thổ cư'.")
+
+    return df_filtered.reset_index(drop=True)
 
 
 class DataCleaner:
@@ -184,7 +213,6 @@ class DataCleaner:
                                     return final.replace(dp, '').title()
                                 return final
                             return final.title()
-                            #return ', '.join(detail_parts)
 
         # --- Step 2: Fallback to searching text for "Mặt phố" or "Mặt đường" ---
         text_to_search = f"{row.get('title', '')} {row.get('description', '')}".lower()
