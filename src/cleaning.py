@@ -20,7 +20,7 @@ from src.config import (
 
 __all__ = [
     "DataCleaner",
-    'drop_mixed_listings'
+    "drop_mixed_listings",
 ]
 
 
@@ -61,19 +61,24 @@ class DataCleaner:
     @staticmethod
     def _parse_and_clean_number(text_value: Any) -> Optional[float]:
         """
-        Extract the first numeric token from text_value and return as float.
-        Handles decimal commas and trailing m / m2 units.
+        Extract the first numeric token from a string and return it as a float.
         """
         if not isinstance(text_value, str):
             return None
 
-        match = re.search(r"(\d+[\.,]?\d*)", text_value)
+        # A more robust regex to capture a sequence of digits, dots, and commas.
+        match = re.search(r"([\d\.,]+)", text_value)
         if not match:
             return None
 
-        num_str = match.group(1).replace(",", ".")
+        num_str = match.group(1)
+
+        # 1. Remove the thousand separators ('.').
+        # 2. Replace the decimal separator (',') with a standard period ('.').
+        cleaned_num_str = num_str.replace(".", "").replace(",", ".")
+
         try:
-            return float(num_str)
+            return round(float(cleaned_num_str), 2)
         except (ValueError, TypeError):
             return None
 
@@ -152,7 +157,8 @@ class DataCleaner:
                 "xóm", 'hẻm', 'kiệt'
             )
             # Filter for cases with no explicit prefix
-            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first) and len(first.split()) <= 5:
+            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first) and len(
+                    first.split()) <= 5:
                 return first
 
         parts_raw = str(row.get("address_parts", "")).strip()
@@ -236,12 +242,24 @@ class DataCleaner:
     @staticmethod
     def extract_total_price(main_info_json: str) -> float:
         def _convert(price_str: str) -> float:
-            price_str = price_str.lower().replace(",", ".").strip()
+            price_str = price_str.lower().strip()
+            num_part = re.search(r"([\d\.,]+)", price_str)
+
+            if not num_part:
+                raise ValueError("No numeric part found in price string")
+
+            # Use the robust cleaning function
+            cleaned_num = DataCleaner._parse_and_clean_number(num_part.group(1))
+            if cleaned_num is None:
+                raise ValueError("Could not parse number")
+
             if "tỷ" in price_str:
-                return float(price_str.replace("tỷ", "").strip()) * 1e9
-            if "triệu" in price_str:
-                return float(price_str.replace("triệu", "").strip()) * 1e6
-            return float(price_str)
+                value = cleaned_num * 1e9
+            elif "triệu" in price_str:
+                value = cleaned_num * 1e6
+            else:
+                value = cleaned_num
+            return round(value, 2)
 
         if not isinstance(main_info_json, str):
             return np.nan
@@ -325,7 +343,7 @@ class DataCleaner:
         potential_numbers = {
             int(n)
             for n in re.findall(r"(?:cải\s+tạo\s+lên|xây\s+lên|nâng\s+tầng\s+lên|xin\s+phép\s+xây)\s*(\d+)", text)
-        } # For filtering out potential numbers of a building, since we only care about actual number
+        }  # For filtering out potential numbers of a building, since we only care about actual number
         candidate_numbers: List[int] = []
 
         for num_str in re.findall(rf"(\d+|{num_words_pattern})\s*(?:tầng|lầu|tấm|mê)", text):
@@ -385,9 +403,9 @@ class DataCleaner:
         for quality_val, keywords in QUALITY_LEVELS:
             for kw in keywords:
                 if re.search(rf"\b{re.escape(kw)}\b", text):
-                    return quality_val
+                    return round(quality_val, 2)
 
-        return DEFAULT_QUALITY
+        return round(DEFAULT_QUALITY, 2)
 
     # ----- Land morphology & frontage -----
     @staticmethod
@@ -468,7 +486,9 @@ class DataCleaner:
             if m:
                 nums = [DataCleaner._parse_and_clean_number(n) for n in m.groups()]
                 if all(n is not None for n in nums):
-                    return max(nums)
+                    # Here, we assume the larger dimension is the length
+                    valid_nums = [n for n in nums if n is not None]
+                    return max(valid_nums) if valid_nums else None
             return None
 
         try:
@@ -489,16 +509,9 @@ class DataCleaner:
     def extract_alley_width(row: Dict[str, Any]) -> Optional[float]:
         widths: List[float] = []
 
-        # try:
-        #     val = json.loads(row.get("other_info", "{}") or "{}").get("Đường vào")
-        #     w = DataCleaner._parse_and_clean_number(val)
-        #     if w is not None:
-        #         widths.append(w)
-        # except (json.JSONDecodeError, TypeError):
-        #     pass
-
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        for num_str in re.findall(r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|đường\s+trước\s+nhà)\s*:?\s*([\d.,]+m)(?!²|2)", text):
+        for num_str in re.findall(r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|đường\s+trước\s+nhà)\s*:?\s*([\d.,]+m)(?!²|2)",
+                                  text):
             w = DataCleaner._parse_and_clean_number(num_str)
             if w is not None:
                 widths.append(w)
@@ -515,12 +528,14 @@ class DataCleaner:
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
-        def _convert(num: str, unit: str) -> Optional[float]:
-            try:
-                val = float(num.replace(",", "."))
-                return val * 1000 if unit.lower() == "km" else val
-            except ValueError:
+        def _convert(num_str: str, unit: str) -> Optional[float]:
+            cleaned_num = DataCleaner._parse_and_clean_number(num_str)
+
+            if cleaned_num is None:
                 return None
+
+            result = cleaned_num * 1000 if unit.lower() == "km" else cleaned_num
+            return round(result, 2)
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
@@ -528,14 +543,18 @@ class DataCleaner:
             return None
 
         road_kw = r"(?:mặt\s+phố|đường\s+lớn|đường\s+chính|trục\s+chính|đường\s+ô\s*tô|phố)"
-        dist_cap = r"(\d+[\.,]?\d*)\s*(m|mét|km)?"
+        dist_cap = r"([\d\.,]+)\s*(m|mét|km)?"
         patt1 = rf"{road_kw}\s*(?:cách|khoảng)\s*{dist_cap}"
         patt2 = rf"{dist_cap}\s*(?:ra|tới|cách)\s*{road_kw}"
-        dists = [
-            _convert(num, unit or "m")
-            for num, unit in re.findall(patt1, text) + re.findall(patt2, text)
-            if _convert(num, unit or "m") is not None
-        ]
+
+        dists: List[float] = []
+
+        for num, unit in re.findall(patt1, text) + re.findall(patt2, text):
+            converted = _convert(num, unit or "m")
+
+            if converted is not None:
+                dists.append(converted)
+
         return min(dists) if dists else None
 
     @staticmethod
