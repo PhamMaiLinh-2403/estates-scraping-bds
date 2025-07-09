@@ -110,8 +110,11 @@ class DataCleaner:
             parts = [p.strip() for p in short_address.split(",")]
             for part in parts:
                 # Filter for cases with explicit prefixes "đường", "phố"
-                if part.lower().startswith(("đường ", "phố ")):
-                    return part
+                match = re.search(r'\b(đường|phố)\s+[^\d,]+', part.lower())
+                if match and len(match.group(0).split()) <= 5:
+                    return match.group(0).strip().title()
+                # if part.lower().startswith(("đường ", "phố ")) and len(part.split()) <= 5:
+                #     return part
 
             first = parts[0]
             non_prefixes = (
@@ -120,7 +123,7 @@ class DataCleaner:
                 "xóm", 'hẻm', 'kiệt'
             )
             # Filter for cases with no explicit prefix
-            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first):
+            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first) and len(first.split()) <= 5:
                 return first
 
         parts_raw = str(row.get("address_parts", "")).strip()
@@ -130,7 +133,7 @@ class DataCleaner:
                 if addr_list:
                     last_item = addr_list[-1]
                     m = re.search(r"tại (đường|phố)\s+([^,]+)", last_item, re.IGNORECASE)
-                    if m:
+                    if m and len(m.group(0).split()) <= 5:
                         return f"{m.group(1).capitalize()} {m.group(2).strip()}"
             except (json.JSONDecodeError, ValueError, SyntaxError):
                 pass
@@ -138,7 +141,7 @@ class DataCleaner:
         title = str(row.get("title", "")).strip()
         if title:
             m = re.search(r"(đường|phố)\s+([\w\s\d\-]+?)(?:,|$|\s-|\s--|\()", title, re.IGNORECASE)
-            if m:
+            if m and len(m.group(0).split()) <= 5:
                 street_cap = " ".join(w.capitalize() for w in m.group(2).strip().split())
                 return f"{m.group(1).capitalize()} {street_cap}"
 
