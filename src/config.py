@@ -26,8 +26,8 @@ MAX_WORKERS = 1  # Number of parallel threads for scraping details
 
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": False,
-    "start_index": 0,
-    "count": 50,
+    "start_index": 20000,
+    "count": 5000,
     "stagger_mode": "random",
     "stagger_step_sec": 2.0,
     "stagger_max_sec": 3.0,
