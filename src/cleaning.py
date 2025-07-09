@@ -117,7 +117,7 @@ class DataCleaner:
             non_prefixes = (
                 "phường", "xã", "dự án", "quận",
                 "huyện", "thị trấn", "số", "thôn",
-                "xóm"
+                "xóm", 'hẻm', 'kiệt'
             )
             # Filter for cases with no explicit prefix
             if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first):
