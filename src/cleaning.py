@@ -177,7 +177,14 @@ class DataCleaner:
                                 break
 
                         if detail_parts:
-                            return ", ".join(detail_parts)
+                            final = ", ".join(detail_parts).lower()
+                            dp = str(row.get('Đường phố', '')).lower()
+                            if dp:
+                                if dp in final:
+                                    return final.replace(dp, '').title()
+                                return final
+                            return final.title()
+                            #return ', '.join(detail_parts)
 
         # --- Step 2: Fallback to searching text for "Mặt phố" or "Mặt đường" ---
         text_to_search = f"{row.get('title', '')} {row.get('description', '')}".lower()
