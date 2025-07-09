@@ -461,16 +461,16 @@ class DataCleaner:
     def extract_alley_width(row: Dict[str, Any]) -> Optional[float]:
         widths: List[float] = []
 
-        try:
-            val = json.loads(row.get("other_info", "{}") or "{}").get("Đường vào")
-            w = DataCleaner._parse_and_clean_number(val)
-            if w is not None:
-                widths.append(w)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        # try:
+        #     val = json.loads(row.get("other_info", "{}") or "{}").get("Đường vào")
+        #     w = DataCleaner._parse_and_clean_number(val)
+        #     if w is not None:
+        #         widths.append(w)
+        # except (json.JSONDecodeError, TypeError):
+        #     pass
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        for num_str in re.findall(r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|đường\s+trước\s+nhà)\s*:?\s*([\d.,m]+)", text):
+        for num_str in re.findall(r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|đường\s+trước\s+nhà)\s*:?\s*([\d.,]+m)(?!²|2)", text):
             w = DataCleaner._parse_and_clean_number(num_str)
             if w is not None:
                 widths.append(w)
