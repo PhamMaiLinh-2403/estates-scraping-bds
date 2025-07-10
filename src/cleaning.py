@@ -559,37 +559,32 @@ class DataCleaner:
 
     @staticmethod
     def extract_direct_features(row: Dict[str, Any]) -> List[str]:
-        found: set[str] = set()
-        text = f"{row.get('title', '')}. {row.get('description', '')}".lower()
-
-        if not text:
+        direct = row.get('description')
+        if not direct or not isinstance(direct, str):
             return []
-        sentences = filter(None, re.split(r"[.\n!?]+", text))
 
-        for sent in sentences:
-            for kw in FEATURE_KEYWORDS:
-                if re.search(rf"\b{re.escape(kw)}\b", sent):
-                    found.add(sent.strip())
-                    break
-        return list(found)
-    
-    def extract_direct_features(row: Dict[str, Any]) -> List[str]:
-        direct = row['description']
         direct_list = direct.split('\n')
         new_version = []
         for part in direct_list:
-            if 'liên hệ' in part.lower() or 'lh' in part.lower():
+            part_lower = part.lower()
+            part_lower_words = part_lower.split()
+
+            if 'liên hệ' in part_lower or 'lh' in part_lower:
                 continue
-            elif '***' in part.lower():
+            elif '***' in part_lower:
                 continue
-            elif 'tỷ' in part.lower().split() or 'tr' in part.lower().split() or 'triệu' in part.lower().split() and 'thương lượng' not in part.lower() and 'tốt' not in part.lower().split():
+            elif ('tỷ' in part_lower_words or
+                  'tr' in part_lower_words or
+                  ('triệu' in part_lower_words and
+                   'thương lượng' not in part_lower and
+                   'tốt' not in part_lower_words)):
                 continue
-            elif 'giá' in part.lower().split() and 'thương lượng' not in part.lower() and 'tốt' not in part.lower().split():
+            elif ('giá' in part_lower_words and
+                  'thương lượng' not in part_lower and
+                  'tốt' not in part_lower_words):
                 continue
-            elif 'xem nhà' in part.lower():
+            elif 'xem nhà' in part_lower:
                 continue
             else:
                 new_version.append(part)
-        # new_version = '\n'.join(new_version)
         return new_version
-        
