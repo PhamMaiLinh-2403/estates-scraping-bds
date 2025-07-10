@@ -421,25 +421,33 @@ class DataCleaner:
     @staticmethod
     def extract_facade_width(row: Dict[str, Any]) -> Optional[float]:
         def _find(text: str) -> Optional[float]:
+            """Helper to find facade width in a given text string using regex."""
             if not text:
                 return None
 
-            m = re.search(r"(?:mặt tiền|mt|ngang|rộng|chiều ngang)\s*:?\s*([\d.,m]+)", text.lower())
+            # Regex to find keywords for width followed by a number
+            m = re.search(r"(?:mặt tiền|chiều rộng|chiều ngang)\s*:?\s*([\d.,m]+)", text.lower())
 
             if m:
+                # Use the class's number parsing utility
                 return DataCleaner._parse_and_clean_number(m.group(1))
             return None
 
+        # --- Step 1: Check structured 'other_info' JSON field first ---
         try:
-            val = json.loads(row.get("other_info", "{}") or "{}").get("Mặt tiền")
+            other_info_json = row.get("other_info", "{}") or "{}"
+            val = json.loads(other_info_json).get("Mặt tiền")
             w = DataCleaner._parse_and_clean_number(val)
             if w is not None:
                 return w
         except (json.JSONDecodeError, TypeError):
             pass
 
+        # --- Step 2: Check structured 'main_info' JSON field ---
         try:
-            for it in json.loads(row.get("main_info", "[]") or "[]"):
+            main_info_json = row.get("main_info", "[]") or "[]"
+            for it in json.loads(main_info_json):
+                # Check for area info that often contains dimensions in the 'ext' field
                 if it.get("title") == "Diện tích" and it.get("ext"):
                     w = _find(it["ext"])
                     if w is not None:
@@ -447,10 +455,14 @@ class DataCleaner:
         except (json.JSONDecodeError, TypeError):
             pass
 
+        # --- Step 3: Fallback to searching free-text fields ---
         for field in (row.get("description"), row.get("title")):
+            # Convert field to string to handle potential non-string types
             w = _find(str(field))
             if w is not None:
                 return w
+
+        # Return None if no width was found in any source
         return None
 
     @staticmethod
