@@ -526,7 +526,7 @@ class DataCleaner:
         # Define alley-related keywords and patterns
         alley_kw = r"(?:ngõ|hẻm|ngách|kiệt|lối\s+vào|đường\s+vào|đường\s+trước\s+nhà)"
         width_kw = r"(?:rộng\s*)?"  # optional "rộng"
-        num_pat = r"(\d{1,3}(?:[\.,]\d{1,2})?)\s*(m|mét)?(?!²|2)"
+        num_pat = r"(\d{1,3}(?:[\.,]\d{1,2})?)\s*(m|mét) (?!²|2)"
 
         # Match patterns like "hẻm rộng 3m", "đường vào: 4m", etc.
         pattern = rf"{alley_kw}[\s:–-]*{width_kw}{num_pat}"
