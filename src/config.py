@@ -42,7 +42,7 @@ OUTPUT_DIR = "output"
 URLS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_urls.csv"
 DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details.csv"
 CLEANED_DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details_cleaned.csv"
-FEATURE_ENGINEERED_OUTPUT_FILE = f"{OUTPUT_DIR}/feature_engineered_listings.csv"
+FEATURE_ENGINEERED_OUTPUT_FILE = f"{OUTPUT_DIR}/feature_engineered_listings.xlsx"
 
 # Final columns of output
 FINAL_COLUMNS = [

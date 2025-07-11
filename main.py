@@ -60,6 +60,8 @@ def save_details_to_csv(details, file_path):
     else:
         print(f"Saved {len(details)} listing records → {file_path}")
 
+def save_to_excel()
+
 
 # --- Worker & Concurrency ---
 def chunks(iterable, n):
@@ -220,7 +222,7 @@ def run_feature_engineering():
     df_final = df.reindex(columns=config.FINAL_COLUMNS)
 
     # Save the final result
-    df_final.to_csv(config.FEATURE_ENGINEERED_OUTPUT_FILE, index=False, quoting=csv.QUOTE_ALL)
+    df_final.to_excel(config.FEATURE_ENGINEERED_OUTPUT_FILE, index=False)
     print(
         f"Successfully engineered features and saved {len(df_final)} records to '{config.FEATURE_ENGINEERED_OUTPUT_FILE}'")
 
