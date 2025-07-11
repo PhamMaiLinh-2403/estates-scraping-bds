@@ -60,9 +60,6 @@ def save_details_to_csv(details, file_path):
     else:
         print(f"Saved {len(details)} listing records → {file_path}")
 
-def save_to_excel()
-
-
 # --- Worker & Concurrency ---
 def chunks(iterable, n):
     iterable = list(iterable)

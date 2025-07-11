@@ -522,48 +522,60 @@ class DataCleaner:
         widths: List[float] = []
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        for num_str in re.findall(r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|đường\s+trước\s+nhà)\s*:?\s*([\d.,]+m)(?!²|2)",
-                                  text):
+
+        # Define alley-related keywords and patterns
+        alley_kw = r"(?:ngõ|hẻm|ngách|kiệt|lối\s+vào|đường\s+vào|đường\s+trước\s+nhà)"
+        width_kw = r"(?:rộng\s*)?"  # optional "rộng"
+        num_pat = r"(\d{1,3}(?:[\.,]\d{1,2})?)\s*(m|mét)?(?!²|2)"
+
+        # Match patterns like "hẻm rộng 3m", "đường vào: 4m", etc.
+        pattern = rf"{alley_kw}[\s:–-]*{width_kw}{num_pat}"
+
+        for match in re.findall(pattern, text):
+            num_str = match[0]
             w = DataCleaner._parse_and_clean_number(num_str)
             if w is not None:
                 widths.append(w)
 
         if widths:
             return min(widths)
+
+        # Heuristic fallback based on phrases
         if "ô tô tránh" in text:
             return 5.0
         if "xe tải tránh" in text:
             return 10.0
-        if any(k in text for k in ["ô tô vào", "ô tô đỗ cửa", "oto vào"]):
+        if any(k in text for k in ["ô tô vào", "oto vào", "ô tô đỗ cửa", "oto đỗ cửa", "ô tô đỗ tận nơi"]):
             return 3.5
+
         return None
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
         def _convert(num_str: str, unit: str) -> Optional[float]:
             cleaned_num = DataCleaner._parse_and_clean_number(num_str)
-
             if cleaned_num is None:
                 return None
-
-            result = cleaned_num * 1000 if unit.lower() == "km" else cleaned_num
-            return round(result, 2)
+            return round(cleaned_num * 1000 if unit.lower() == "km" else cleaned_num, 2)
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-
         if not text:
             return None
 
         road_kw = r"(?:mặt\s+phố|đường\s+lớn|đường\s+chính|trục\s+chính|đường\s+ô\s*tô|phố)"
-        dist_cap = r"([\d\.,]+)\s*(m|mét|km)?"
-        patt1 = rf"{road_kw}\s*(?:cách|khoảng)\s*{dist_cap}"
-        patt2 = rf"{dist_cap}\s*(?:ra|tới|cách)\s*{road_kw}"
+        unit_kw = r"(km|mét|m)?"
+        dist_cap = r"(\d{1,3}(?:[\.,]\d{1,3})?)\s*" + unit_kw
 
-        dists: List[float] = []
+        # Patterns capture context like "cách mặt phố 30m" or "30m tới đường lớn"
+        patt1 = rf"{road_kw}.*?(?:cách|khoảng|tầm|tới)\s*{dist_cap}"
+        patt2 = rf"{dist_cap}\s*(?:ra|tới|cách|đến)\s*{road_kw}"
 
-        for num, unit in re.findall(patt1, text) + re.findall(patt2, text):
-            converted = _convert(num, unit or "m")
+        matches = re.findall(patt1, text) + re.findall(patt2, text)
+        dists = []
 
+        for match in matches:
+            num, unit = match[0], match[1] or "m"
+            converted = _convert(num, unit)
             if converted is not None:
                 dists.append(converted)
 
