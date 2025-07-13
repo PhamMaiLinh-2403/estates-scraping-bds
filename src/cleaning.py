@@ -151,13 +151,12 @@ class DataCleaner:
                 #     return part
 
             first = parts[0]
-            non_prefixes = (
-                "phường", "xã", "dự án", "quận",
-                "huyện", "thị trấn", "số", "thôn",
-                "xóm", 'hẻm', 'kiệt'
+            non_street_keywords = (
+                "phường", "xã", "dự án", "quận", "huyện", "thị trấn",
+                "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ"
             )
             # Filter for cases with no explicit prefix
-            if not first.lower().startswith(non_prefixes) and any(c.isalpha() for c in first) and len(
+            if not first.lower().startswith(non_street_keywords) and any(c.isalpha() for c in first) and len(
                     first.split()) <= 5:
                 return first
 
