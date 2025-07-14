@@ -576,38 +576,89 @@ class DataCleaner:
 
     @staticmethod
     def extract_alley_width(row: Dict[str, Any]) -> Optional[float]:
-        widths: List[float] = []
+        """
+        Extract alley width from listing title and description.
+        """
 
-        text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+        def _parse_and_clean_width(text_value: Any) -> Optional[float]:
+            """
+            Extract the first numeric token from a string and return it as a float.
+            Handles both Vietnamese (1.000,5) and UK (1,000.5) formats.
+            """
+            if not isinstance(text_value, str):
+                return None
 
-        # Define alley-related keywords and patterns
+            match = re.search(r"([\d\.,]+)", text_value)
+            if not match:
+                return None
+
+            num_str = match.group(1)
+
+            if "," in num_str:
+                cleaned_num_str = num_str.replace(".", "").replace(",", ".")
+            else:
+                cleaned_num_str = num_str
+
+            try:
+                value = float(cleaned_num_str)
+                # If the value is unreasonably large (e.g., 35m alley), try UK interpretation
+                if value > 20:
+                    # Retry parsing assuming UK decimal (period) and thousands (comma)
+                    cleaned_num_str = num_str.replace(",", "")
+                    value = float(cleaned_num_str)
+                return round(value, 2)
+            except (ValueError, TypeError):
+                return None
+
+        text = f"{row.get('title', '')} {row.get('description', '')}"
+        text_lower = text.lower()
+
+        # Step 1: If property is on the main street ("mặt phố"), it's not in an alley
+        if is_on_main_road(text_lower):
+            return 0.0
+
+        # Step 2: If it's on an alley-facing street ("mặt ngõ", "mặt hẻm"), only use numeric extraction
+        prioritize_numeric_only = "mặt ngõ" in text_lower or "mặt hẻm" in text_lower
+
+        # Keywords related to alley/path
         alley_kw = r"(?:ngõ|hẻm|ngách|kiệt|lối\s+vào|đường\s+vào|đường\s+trước\s+nhà)"
-        width_kw = r"(?:rộng\s*)?"  # optional "rộng"
+        optional_prefix = r"(?:mặt\s+)?"
+        approx_kw = r"(?:rộng\s*)?(?:khoảng|gần|trên\s+dưới|tầm|xấp\s+xỉ)?\s*"
         num_pat = r"(\d{1,3}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"
 
-        # Match patterns like "hẻm rộng 3m", "đường vào: 4m", etc.
-        pattern = rf"{alley_kw}[\s:–-]*{width_kw}{num_pat}"
+        pattern = rf"{optional_prefix}{alley_kw}[\s:–\-]{0, 5}{approx_kw}{num_pat}"
 
-        for match in re.findall(pattern, text):
+        widths: List[float] = []
+
+        for match in re.findall(pattern, text_lower):
             num_str = match[0]
-            w = DataCleaner._parse_and_clean_number(num_str)
-            if w is not None:
-                widths.append(w)
+            width = _parse_and_clean_width(num_str)
+            if width is not None:
+                widths.append(width)
+
+        # Step 3: Also allow patterns like "4m hẻm", "3.5m đường vào" (number before keyword)
+        reverse_pattern = rf"{approx_kw}{num_pat}[\s\-:]{0, 5}{alley_kw}"
+        for match in re.findall(reverse_pattern, text_lower):
+            num_str = match[0]
+            width = _parse_and_clean_width(num_str)
+            if width is not None:
+                widths.append(width)
 
         if widths:
             return min(widths)
 
-        # Heuristic fallback based on phrases
-        if "nhà mặt phố" in text.lower() or "nhà mặt đường" in text.lower():
-            return 0
-        if "ô tô tránh" in text.lower():
-            return 5.0
-        if "xe tải tránh" in text.lower():
-            return 10.0
-        if "xe máy tránh" in text.lower():
-            return 2.5
-        if any(k in text.lower() for k in ["ô tô vào", "oto vào", "ô tô đỗ cửa", "oto đỗ cửa", "ô tô đỗ tận nơi"]):
-            return 3.5
+        # Step 4: Apply fallback heuristics only if not "mặt ngõ" or "mặt hẻm"
+        if not prioritize_numeric_only:
+            if "ô tô tránh" in text_lower:
+                return 5.0
+            if "xe tải tránh" in text_lower:
+                return 10.0
+            if "xe máy tránh" in text_lower:
+                return 2.5
+            if any(k in text_lower for k in [
+                "ô tô vào", "oto vào", "ô tô đỗ cửa", "oto đỗ cửa", "ô tô đỗ tận nơi"
+            ]):
+                return 3.5
 
         return None
 
