@@ -16,7 +16,8 @@ from src.config import (
     SHAPE_KEYWORDS,
     STREET_PREFIXES,
     NON_STREET_KEYWORDS,
-    DETAIL_PREFIXES
+    DETAIL_PREFIXES,
+    NEGATION_PATTERNS,
 )
 
 __all__ = [
@@ -252,7 +253,7 @@ class DataCleaner:
             num_part = re.search(r"([\d\.,]+)", price_str)
 
             if not num_part:
-                raise ValueError("No numeric part found in price string")
+                raise ValueError("No numeric part found in price string.")
 
             # Use the robust cleaning function
             cleaned_num = DataCleaner._parse_and_clean_number(num_part.group(1))
@@ -416,11 +417,18 @@ class DataCleaner:
     # ----- Land morphology & frontage -----
     @staticmethod
     def extract_land_shape(row: Dict[str, Any]) -> str:
+        def is_negated(text: str, kw: str) -> bool:
+            for pattern in NEGATION_PATTERNS:
+                if re.search(pattern.format(re.escape(kw)), text):
+                    return True
+            return False
+
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
         for shape, kws in SHAPE_KEYWORDS.items():
-            if any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in kws):
-                return shape
+            for kw in kws:
+                if re.search(rf"\b{re.escape(kw)}\b", text) and not is_negated(text, kw):
+                    return shape
 
         return "Chữ nhật"
 

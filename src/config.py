@@ -123,7 +123,7 @@ FACADE_COUNT_MAP = [
         (r'\b2\s+mặt\s+tiền\b', 2),
         (r'\bhai\s+mặt\s+tiền\b', 2),
         (r'\blô\s+góc\b', 2),  # "lô góc" strongly implies 2 facades
-        (r'\bcăn\s+góc\b', 2), # Synonym for corner lot
+        (r'\bcăn\s+góc\b', 2),
         (r'\b2\s+mặt\s+thoáng\b', 2),
 
         # Keywords explicitly stating 1 facade (checked last)
@@ -208,3 +208,10 @@ NON_STREET_KEYWORDS = (
     "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ"
 )
 DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án')
+
+NEGATION_PATTERNS = [
+    r"không\s+{}",
+    r"chưa\s+{}",
+    r"không\s+bị\s+{}",
+    r"chưa\s+bị\s+{}",
+]
