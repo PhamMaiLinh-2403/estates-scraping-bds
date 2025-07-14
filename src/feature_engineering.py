@@ -17,7 +17,7 @@ class FeatureEngineer:
         distance = row.get('Khoảng cách tới trục đường chính (m)')
         alley_width = row.get('Độ rộng ngõ/ngách nhỏ nhất (m)')
 
-        # Cannot determine VT without distance to main road.
+        # Cannot determine VT without distance to the main road.
         if pd.isna(distance):
             return None
 

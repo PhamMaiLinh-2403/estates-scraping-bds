@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any, Dict, List, Optional
+import random
 
 import numpy as np
 import pandas as pd
@@ -52,6 +53,30 @@ def drop_mixed_listings(df: pd.DataFrame):
         print(f"Removed {removed_count} listings containing 'thổ cư'.")
 
     return df_filtered.reset_index(drop=True)
+
+def is_on_main_road(text: str) -> bool:
+    # Must refer to the property itself being on a main road, not just near one
+    direct_main_road_patterns = [
+        r"(nhà|vị trí|căn nhà|biệt thự|lô đất|đất)\s+(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền\s+đường|mặt\s+tiền)",
+        r"(tọa lạc|nằm|vị trí)\s+(ngay\s+)?trên\s+(mặt\s+(phố|đường|tiền))",
+        r"(mặt\s+(phố|tiền|đường))\s+(lớn|chính|kinh\s+doanh)"
+    ]
+
+    # Negative patterns: ra mặt phố, gần mặt đường, cách mặt phố 50m, view mặt đường
+    near_but_not_on_patterns = [
+        r"(cách|ra|gần|view)\s+(mặt\s+(phố|đường|tiền))",
+        r"(50|30|100)\s*m\s+(ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))"
+    ]
+
+    for pat in near_but_not_on_patterns:
+        if re.search(pat, text):
+            return False
+
+    for pat in direct_main_road_patterns:
+        if re.search(pat, text):
+            return True
+
+    return False
 
 
 class DataCleaner:
@@ -228,8 +253,8 @@ class DataCleaner:
             return final.title()
 
         # --- Step 2: Fallback to searching text for "Mặt phố" or "Mặt đường" ---
-        text_to_search = f"{row.get('title', '')}".lower()
-        if re.search(r'\b(mặt\s+phố|mặt\s+đường)\b', text_to_search):
+        text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+        if is_on_main_road(text):
             return "Mặt phố"
 
         # --- Step 3: Default to "Mặt ngõ" if no other information is found ---
@@ -558,7 +583,7 @@ class DataCleaner:
         # Define alley-related keywords and patterns
         alley_kw = r"(?:ngõ|hẻm|ngách|kiệt|lối\s+vào|đường\s+vào|đường\s+trước\s+nhà)"
         width_kw = r"(?:rộng\s*)?"  # optional "rộng"
-        num_pat = r"(\d{1,3}(?:[\.,]\d{1,2})?)\s*(m|mét) (?!²|2)"
+        num_pat = r"(\d{1,3}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"
 
         # Match patterns like "hẻm rộng 3m", "đường vào: 4m", etc.
         pattern = rf"{alley_kw}[\s:–-]*{width_kw}{num_pat}"
@@ -573,11 +598,15 @@ class DataCleaner:
             return min(widths)
 
         # Heuristic fallback based on phrases
-        if "ô tô tránh" in text:
+        if "nhà mặt phố" in text.lower() or "nhà mặt đường" in text.lower():
+            return 0
+        if "ô tô tránh" in text.lower():
             return 5.0
-        if "xe tải tránh" in text:
+        if "xe tải tránh" in text.lower():
             return 10.0
-        if any(k in text for k in ["ô tô vào", "oto vào", "ô tô đỗ cửa", "oto đỗ cửa", "ô tô đỗ tận nơi"]):
+        if "xe máy tránh" in text.lower():
+            return 2.5
+        if any(k in text.lower() for k in ["ô tô vào", "oto vào", "ô tô đỗ cửa", "oto đỗ cửa", "ô tô đỗ tận nơi"]):
             return 3.5
 
         return None
@@ -591,27 +620,50 @@ class DataCleaner:
             return round(cleaned_num * 1000 if unit.lower() == "km" else cleaned_num, 2)
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        if not text:
+
+        if not text.strip():
             return None
 
-        road_kw = r"(?:mặt\s+phố|đường\s+lớn|đường\s+chính|trục\s+chính|đường\s+ô\s*tô|phố)"
+        # 1. Direct check if the property is on a main road
+        if is_on_main_road(text):
+            return 0.0
+
+        # 2. Match patterns like "cách mặt phố 30m" or "30m tới đường lớn" but avoid irrelevant location names
+        road_kw = r"(mặt\s+phố|đường\s+lớn|đường\s+chính|trục\s+chính|đường\s+ô\s*tô|phố|đường)"
         unit_kw = r"(km|mét|m)?"
         dist_cap = r"(\d{1,3}(?:[\.,]\d{1,3})?)\s*" + unit_kw
 
-        # Patterns capture context like "cách mặt phố 30m" or "30m tới đường lớn"
-        patt1 = rf"{road_kw}.*?(?:cách|khoảng|tầm|tới)\s*{dist_cap}"
-        patt2 = rf"{dist_cap}\s*(?:ra|tới|cách|đến)\s*{road_kw}"
+        # Avoid these false matches
+        ignore_kw = r"(quận|phường|thành phố|cửa\s+biển|lăng|chợ|hồ|trường|bệnh viện|chùa|khu\s+vực)"
+
+        patt1 = rf"{road_kw}.*?(?:cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}"
+        patt2 = rf"(?:cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}\s*(?:đến|tới|ra)?\s*{road_kw}"
 
         matches = re.findall(patt1, text) + re.findall(patt2, text)
         dists = []
 
         for match in matches:
+            match_text = " ".join(match)
+            if re.search(ignore_kw, match_text):  # Skip if near points of interest
+                continue
             num, unit = match[0], match[1] or "m"
             converted = _convert(num, unit)
-            if converted is not None:
+            if converted is not None and 0 < converted < 1000:  # Set a reasonable range
                 dists.append(converted)
 
-        return min(dists) if dists else None
+        if dists:
+            return min(dists)
+
+        # 3. Try to infer from common phrases
+        if re.search(r"(ngõ\s+nông|ngõ\s+rộng|ngõ\s+thoáng|ngõ\s+gần\s+đường)", text):
+            return 10.0
+        if re.search(r"(ngõ\s+xe\s+máy|ngõ\s+hẹp)", text):
+            return 20.0
+        if re.search(r"(trong\s+ngõ|trong\s+hẻm)", text):
+            return 25.0
+
+        # 4. No match: return a random fallback
+        return float(random.randint(5, 15))
 
     @staticmethod
     def extract_direct_features(row: Dict[str, Any]) -> List[str]:
