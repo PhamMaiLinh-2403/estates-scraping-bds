@@ -376,32 +376,50 @@ class DataCleaner:
     # ----- Construction & quality -----
     @staticmethod
     def get_construction_cost(row: Dict[str, Any]) -> Optional[int]:
-        # Helper lambdas mirror original
         def _prop_type() -> str:
+            """More careful property type detection."""
             text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-            if "biệt thự" in text:
+            if re.search(r"\bbán\s+(căn\s+)?biệt\s+thự\b", text) or re.search(r"\bnhà\s+(kiểu\s+)?biệt\s+thự\b",
+                                                                              text):
                 return "biệt thự"
-            if "nhà cấp 4" in text:
+            if re.search(r"\bnhà\s+cấp\s*4\b", text):
                 return "nhà cấp 4"
             return "nhà thường"
 
         def _has_bsmt() -> bool:
-            return bool(re.search(r"\bhầm\b", f"{row.get('title', '')} {row.get('description', '')}".lower()))
+            text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+            return bool(re.search(r"\b(tầng\s+)?hầm\b", text))
 
+        # Primary signals
         ptype = _prop_type()
         floors = DataCleaner.extract_num_floors(row)
+        area = DataCleaner.extract_total_area(row)
         has_bsmt = _has_bsmt()
 
+        # If it's clearly a biệt thự or cấp 4, trust it
         if ptype == "biệt thự":
             return CONSTRUCTION_COST_MAP["biệt_thự_có_hầm" if has_bsmt else "biệt_thự"]
         if ptype == "nhà cấp 4":
             return CONSTRUCTION_COST_MAP["nhà_cấp_4"]
-        if floors is None or floors == 1:
+
+        # --- Fallback logic ---
+        # Use area + floors to infer structure if ptype is unclear
+        if floors is None:
+            # Single floor fallback
             return CONSTRUCTION_COST_MAP["nhà_1_tầng_btct"]
+
+        if floors == 1:
+            if area is not None and area < 35:
+                # Possibly nhà cấp 4 dù không nói rõ
+                return CONSTRUCTION_COST_MAP["nhà_cấp_4"]
+            return CONSTRUCTION_COST_MAP["nhà_1_tầng_btct"]
+
         if floors >= 2:
             key = "nhà_gte_2_tầng_có_hầm" if has_bsmt else "nhà_gte_2_tầng_không_hầm"
             return CONSTRUCTION_COST_MAP[key]
-        return None
+
+        # Final catch-all
+        return CONSTRUCTION_COST_MAP["nhà_1_tầng_btct"]
 
     @staticmethod
     def estimate_remaining_quality(row: Dict[str, Any]) -> float:
