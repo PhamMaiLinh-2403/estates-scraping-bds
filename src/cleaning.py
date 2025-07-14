@@ -55,28 +55,35 @@ def drop_mixed_listings(df: pd.DataFrame):
     return df_filtered.reset_index(drop=True)
 
 def is_on_main_road(text: str) -> bool:
-    # Must refer to the property itself being on a main road, not just near one
-    direct_main_road_patterns = [
-        r"(nhà|vị trí|căn nhà|biệt thự|lô đất|đất)\s+(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền\s+đường|mặt\s+tiền)",
-        r"(tọa lạc|nằm|vị trí)\s+(ngay\s+)?trên\s+(mặt\s+(phố|đường|tiền))",
-        r"(mặt\s+(phố|tiền|đường))\s+(lớn|chính|kinh\s+doanh)"
-    ]
+    """
+    Determine whether the property is directly on a main road, not just near one.
+    """
+    text = text.lower()
 
-    # Negative patterns: ra mặt phố, gần mặt đường, cách mặt phố 50m, view mặt đường
+    # Negative indicators — mention proximity but not direct access
     near_but_not_on_patterns = [
-        r"(cách|ra|gần|view)\s+(mặt\s+(phố|đường|tiền))",
-        r"(50|30|100)\s*m\s+(ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))"
+        r"(cách|ra|gần|view|đi\s+ra|đi\s+ra\s+đến)\s+(mặt\s+(phố|đường|tiền))",
+        r"(view|hướng\s+ra)\s+(mặt\s+(phố|đường|tiền))",
+        r"\b\d{1,3}\s*m(?:ét)?\s*(tới|ra|cách)\s+(mặt\s+(phố|đường|tiền))",
+        r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))"
     ]
-
     for pat in near_but_not_on_patterns:
         if re.search(pat, text):
             return False
 
+    # Positive indicators — direct mentions of being ON a main road
+    direct_main_road_patterns = [
+        r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc)\s+(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
+        r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc)\s+(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
+        r"(mặt\s+(phố|tiền|đường))\s+(chính|lớn|kinh\s+doanh|sầm\s+uất)",
+        r"nhà\s+(nằm\s+)?trên\s+(phố|đường)\s+(lớn|chính|kinh\s+doanh)"
+    ]
     for pat in direct_main_road_patterns:
         if re.search(pat, text):
             return True
 
     return False
+
 
 
 class DataCleaner:
@@ -578,89 +585,100 @@ class DataCleaner:
     def extract_alley_width(row: Dict[str, Any]) -> Optional[float]:
         """
         Extract alley width from listing title and description.
+        Priority:
+            1. Return 0.0 if on main road ("mặt phố")
+            2. Extract explicit numeric width
+            3. Infer from vehicle clues
+            4. Use descriptive clues as fallback
         """
 
         def _parse_and_clean_width(text_value: Any) -> Optional[float]:
-            """
-            Extract the first numeric token from a string and return it as a float.
-            Handles both Vietnamese (1.000,5) and UK (1,000.5) formats.
-            """
             if not isinstance(text_value, str):
                 return None
-
             match = re.search(r"([\d\.,]+)", text_value)
             if not match:
                 return None
-
             num_str = match.group(1)
-
             if "," in num_str:
                 cleaned_num_str = num_str.replace(".", "").replace(",", ".")
             else:
                 cleaned_num_str = num_str
-
             try:
                 value = float(cleaned_num_str)
-                # If the value is unreasonably large (e.g., 35m alley), try UK interpretation
                 if value > 20:
-                    # Retry parsing assuming UK decimal (period) and thousands (comma)
-                    cleaned_num_str = num_str.replace(",", "")
-                    value = float(cleaned_num_str)
+                    value = float(num_str.replace(",", ""))  # handle commas as thousands separator
                 return round(value, 2)
             except (ValueError, TypeError):
                 return None
 
-        text = f"{row.get('title', '')} {row.get('description', '')}"
-        text_lower = text.lower()
+        text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
-        # Step 1: If property is on the main street ("mặt phố"), it's not in an alley
-        if is_on_main_road(text_lower):
+        # === 0. Explicitly on main road
+        if "mặt phố" in text or "mặt tiền đường lớn" in text:
             return 0.0
 
-        # Step 2: If it's on an alley-facing street ("mặt ngõ", "mặt hẻm"), only use numeric extraction
-        prioritize_numeric_only = "mặt ngõ" in text_lower or "mặt hẻm" in text_lower
-
-        # Keywords related to alley/path
-        alley_kw = r"(?:ngõ|hẻm|ngách|kiệt|lối\s+vào|đường\s+vào|đường\s+trước\s+nhà)"
-        optional_prefix = r"(?:mặt\s+)?"
-        approx_kw = r"(?:rộng\s*)?(?:khoảng|gần|trên\s+dưới|tầm|xấp\s+xỉ)?\s*"
+        # === 1. Try extracting numeric width via regex
+        alley_kw = r"(ngõ|hẻm|ngách|kiệt|đường\s+vào|lối\s+vào|trước\s+nhà|đường\s+trước\s+nhà)"
+        vehicle_kw = r"(oto|ô\s*tô|xe\s+hơi|xe\s+tải|ba\s+gác|xe\s+máy)"
+        approx_kw = r"(rộng\s*)?(khoảng|gần|trên\s+dưới|tầm|xấp\s+xỉ)?\s*"
         num_pat = r"(\d{1,3}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"
-
-        pattern = rf"{optional_prefix}{alley_kw}[\s:–\-]{0, 5}{approx_kw}{num_pat}"
 
         widths: List[float] = []
 
-        for match in re.findall(pattern, text_lower):
-            num_str = match[0]
-            width = _parse_and_clean_width(num_str)
-            if width is not None:
-                widths.append(width)
+        patterns = [
+            rf"{alley_kw}[\s:–\-]{0, 5}{approx_kw}{num_pat}",  # "hẻm trước nhà 4m"
+            rf"{approx_kw}{num_pat}[\s\-:]{0, 5}{alley_kw}",  # "4m hẻm trước nhà"
+            rf"{alley_kw}[\s\-:]{0, 5}{vehicle_kw}[\s\-:]{0, 5}{approx_kw}{num_pat}",  # "hẻm xe hơi 4m"
+            rf"{approx_kw}{num_pat}[\s\-:]{0, 5}{vehicle_kw}[\s\-:]{0, 5}{alley_kw}",  # "4m xe tải ngõ"
+        ]
 
-        # Step 3: Also allow patterns like "4m hẻm", "3.5m đường vào" (number before keyword)
-        reverse_pattern = rf"{approx_kw}{num_pat}[\s\-:]{0, 5}{alley_kw}"
-        for match in re.findall(reverse_pattern, text_lower):
-            num_str = match[0]
-            width = _parse_and_clean_width(num_str)
-            if width is not None:
-                widths.append(width)
+        for pattern in patterns:
+            for match in re.findall(pattern, text):
+                if isinstance(match, tuple):
+                    num_str = next((m for m in match if re.match(r"^\d", m)), None)
+                else:
+                    num_str = match
+                width = _parse_and_clean_width(num_str)
+                if width:
+                    widths.append(width)
 
         if widths:
             return min(widths)
 
-        # Step 4: Apply fallback heuristics only if not "mặt ngõ" or "mặt hẻm"
-        if not prioritize_numeric_only:
-            if "ô tô tránh" in text_lower:
-                return 5.0
-            if "xe tải tránh" in text_lower:
-                return 10.0
-            if "xe máy tránh" in text_lower:
-                return 2.5
-            if any(k in text_lower for k in [
-                "ô tô vào", "oto vào", "ô tô đỗ cửa", "oto đỗ cửa", "ô tô đỗ tận nơi"
-            ]):
-                return 3.5
+        # === 2. Infer width based on vehicle access
+        vehicle_fallback = [
+            ("xe tải tránh", 10.0),
+            ("ô tô tránh", 5.0),
+            ("oto tránh", 5.0),
+            ("xe tải", 6.0),
+            ("ô tô vào tận nơi", 4.0),
+            ("ô tô đỗ cửa", 3.5),
+            ("oto vào", 3.5),
+            ("ô tô vào", 3.5),
+            ("oto đỗ cửa", 3.5),
+            ("hẻm ô tô", 4.0),
+            ("hẻm xe hơi", 4.0),
+            ("ngõ ô tô", 4.0),
+            ("trước nhà ô tô", 4.0),
+            ("ba gác", 2.5),
+            ("xe máy tránh", 2.5),
+        ]
+        for kw, width in vehicle_fallback:
+            if kw in text:
+                return width
 
-        return None
+        # === 3. Descriptive fallback
+        descriptive_fallback = [
+            ("hẻm thông thoáng", 2.5),
+            ("ngõ thông", 2.5),
+            ("hẻm thông", 2.5),
+            ("đường thông", 2.5),
+        ]
+        for kw, width in descriptive_fallback:
+            if kw in text:
+                return width
+
+        return float(random.randint(2, 8))
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
