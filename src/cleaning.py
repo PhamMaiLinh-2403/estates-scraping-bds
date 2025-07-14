@@ -85,6 +85,24 @@ def is_on_main_road(text: str) -> bool:
     return False
 
 
+def _parse_and_clean_width(text_value: Any) -> Optional[float]:
+    if not isinstance(text_value, str):
+        return None
+    match = re.search(r"([\d\.,]+)", text_value)
+    if not match:
+        return None
+    num_str = match.group(1)
+    if "," in num_str:
+        cleaned_num_str = num_str.replace(".", "").replace(",", ".")
+    else:
+        cleaned_num_str = num_str
+    try:
+        value = float(cleaned_num_str)
+        if value > 20:
+            value = float(num_str.replace(",", ""))  # handle commas as thousands separator
+        return round(value, 2)
+    except (ValueError, TypeError):
+        return None
 
 class DataCleaner:
     """
@@ -211,60 +229,55 @@ class DataCleaner:
         return None
 
     @staticmethod
-    def extract_address_detail(row: Dict[str, Any]) -> str:
+    def extract_address_detail(row: Dict[str, str]) -> str:
         """
         Extracts specific address details like house/alley numbers.
         If not available, determine if it's 'Mặt phố' or 'Mặt ngõ'.
         """
 
-        # --- Step 1: Analyze 'short_address' with improved logic ---
-        short_address = str(row.get("short_address", ""))
+        short_address = str(row.get("short_address", "")).strip()
 
         parts = [p.strip() for p in short_address.split(',') if p.strip()]
+        detail_parts = []
         is_street = False
-        first_part = parts[0].lower()
 
-        if first_part.startswith(STREET_PREFIXES) and not first_part.startswith(NON_STREET_KEYWORDS):
-            is_street = True
+        if parts:
+            first_part = parts[0].lower()
+            if first_part.startswith(STREET_PREFIXES) and not first_part.startswith(NON_STREET_KEYWORDS):
+                is_street = True
 
         if not is_street:
-            # If not street, try to extract detail prefix parts
-            detail_parts = []
             for part in parts:
                 part_lower = part.lower()
                 if part_lower.startswith(DETAIL_PREFIXES) or re.match(r'^\d+[\/\w-]*', part.strip()):
                     detail_parts.append(part)
                 else:
-                    break  # Stop once we hit a part that is clearly not a detail prefix
-
-            if not detail_parts:
-                return ""
+                    break
 
             final = ", ".join(detail_parts)
 
-            # Remove street-like patterns inside the result
-            # e.g., 'Đường Lê Sát', 'Đường Số 16', etc.
-            final = re.sub(r'\b(đường|hẻm|ngõ|tổ|khu phố|phố|số nhà|nhà|mặt tiền)[^,]*', '', final, flags=re.IGNORECASE)
+            # Remove embedded street-related terms
+            final = re.sub(r'\b(đường|phố|số nhà|hẻm|ngõ|kiệt|ngách|mặt tiền)[^,]*', '', final, flags=re.IGNORECASE)
 
+            # Remove Đường phố info if already in detail
             dp = str(row.get("Đường phố", "")).strip().lower()
-            if dp:
-                final_lower = final.lower()
-                if dp in final_lower:
-                    final = final_lower.replace(dp, '')
+            if dp and dp in final.lower():
+                final = re.sub(re.escape(dp), '', final, flags=re.IGNORECASE)
 
-            # Clean up multiple slashes, spaces, etc.
-            final = re.sub(r'\s+', ' ', final)  # Normalize whitespace
-            final = re.sub(r'(^[,\s]+|[,\s]+$)', '', final)  # Trim leading/trailing commas or spaces
-            final = re.sub(r',\s*,+', ',', final)  # Collapse redundant commas
+            # Clean formatting
+            final = re.sub(r'\s+', ' ', final)
+            final = re.sub(r'(^[,\s]+|[,\s]+$)', '', final)
+            final = re.sub(r',\s*,+', ',', final)
 
-            return final.title()
+            if final:
+                return final.title()
 
-        # --- Step 2: Fallback to searching text for "Mặt phố" or "Mặt đường" ---
+        # Fallback 1: Check if the text suggests main road
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
         if is_on_main_road(text):
             return "Mặt phố"
 
-        # --- Step 3: Default to "Mặt ngõ" if no other information is found ---
+        # Fallback 2: Default
         return "Mặt ngõ"
 
     # ----- Datetime & pricing -----
@@ -370,7 +383,7 @@ class DataCleaner:
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
         if not text:
-            return None
+            return 1
 
         word_to_num = {
             "một": 1, "hai": 2, "ba": 3,
@@ -403,7 +416,7 @@ class DataCleaner:
             return None
         if "nhà cấp 4" in text or "nhà trệt" in text:
             return 1
-        return None
+        return 1
 
     # ----- Construction & quality -----
     @staticmethod
@@ -494,14 +507,14 @@ class DataCleaner:
 
             if m:
                 # Use the class's number parsing utility
-                return DataCleaner._parse_and_clean_number(m.group(1))
+                return _parse_and_clean_width(m.group(1))
             return None
 
         # --- Step 1: Check structured 'other_info' JSON field first ---
         try:
             other_info_json = row.get("other_info", "{}") or "{}"
             val = json.loads(other_info_json).get("Mặt tiền")
-            w = DataCleaner._parse_and_clean_number(val)
+            w = _parse_and_clean_width(val)
             if w is not None:
                 return w
         except (json.JSONDecodeError, TypeError):
@@ -591,26 +604,6 @@ class DataCleaner:
             3. Infer from vehicle clues
             4. Use descriptive clues as fallback
         """
-
-        def _parse_and_clean_width(text_value: Any) -> Optional[float]:
-            if not isinstance(text_value, str):
-                return None
-            match = re.search(r"([\d\.,]+)", text_value)
-            if not match:
-                return None
-            num_str = match.group(1)
-            if "," in num_str:
-                cleaned_num_str = num_str.replace(".", "").replace(",", ".")
-            else:
-                cleaned_num_str = num_str
-            try:
-                value = float(cleaned_num_str)
-                if value > 20:
-                    value = float(num_str.replace(",", ""))  # handle commas as thousands separator
-                return round(value, 2)
-            except (ValueError, TypeError):
-                return None
-
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
         # === 0. Explicitly on main road
