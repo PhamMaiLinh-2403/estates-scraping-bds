@@ -131,7 +131,7 @@ class DataCleaner:
                 last_item = address_list[-1]
                 match = re.search(r"tại\s+((?:phường|xã|thị trấn)\s+[\w\s\d\-()]+)", last_item, re.IGNORECASE)
                 if match:
-                    return match.group(1).strip()
+                    return match.group(1).title().strip()
         except (json.JSONDecodeError, TypeError, KeyError, IndexError):
             pass
 
@@ -146,19 +146,18 @@ class DataCleaner:
                 # Filter for cases with explicit prefixes "đường", "phố"
                 match = re.search(r'\b(đường|phố)\s+[^\d,]+', part.lower())
                 if match and len(match.group(0).split()) <= 5:
-                    return match.group(0).strip().title()
-                # if part.lower().startswith(("đường ", "phố ")) and len(part.split()) <= 5:
-                #     return part
+                    return match.group(0).title().strip()
 
             first = parts[0]
             non_street_keywords = (
                 "phường", "xã", "dự án", "quận", "huyện", "thị trấn",
                 "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ"
             )
-            # Filter for cases with no explicit prefix
-            if not first.lower().startswith(non_street_keywords) and any(c.isalpha() for c in first) and len(
-                    first.split()) <= 5:
-                return first
+
+            # Filter for parts that do NOT start with a digit and do not start with non-street keywords
+            if not first[0].isdigit() and not first.lower().startswith(non_street_keywords) \
+                    and any(c.isalpha() for c in first) and len(first.split()) <= 5:
+                return "Đường " + first.title()
 
         parts_raw = str(row.get("address_parts", "")).strip()
         if parts_raw:
