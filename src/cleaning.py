@@ -15,6 +15,7 @@ from src.config import (
     QUALITY_LEVELS,
     SHAPE_KEYWORDS,
     STREET_PREFIXES,
+    NON_STREET_KEYWORDS,
     DETAIL_PREFIXES
 )
 
@@ -149,13 +150,9 @@ class DataCleaner:
                     return match.group(0).title().strip()
 
             first = parts[0]
-            non_street_keywords = (
-                "phường", "xã", "dự án", "quận", "huyện", "thị trấn",
-                "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ"
-            )
 
             # Filter for parts that do NOT start with a digit and do not start with non-street keywords
-            if not first[0].isdigit() and not first.lower().startswith(non_street_keywords) \
+            if not first[0].isdigit() and not first.lower().startswith(NON_STREET_KEYWORDS) \
                     and any(c.isalpha() for c in first) and len(first.split()) <= 5:
                 return "Đường " + first.title()
 
@@ -189,37 +186,48 @@ class DataCleaner:
 
         # --- Step 1: Analyze 'short_address' with improved logic ---
         short_address = str(row.get("short_address", ""))
-        if short_address:
-            parts = [p.strip() for p in short_address.split(',')]
 
-            if parts:
-                first_part_lower = parts[0].lower()
-                is_street = first_part_lower.startswith(STREET_PREFIXES)
+        parts = [p.strip() for p in short_address.split(',') if p.strip()]
+        is_street = False
+        first_part = parts[0].lower()
 
-                if not is_street:
-                    is_detail_prefix = first_part_lower.startswith(DETAIL_PREFIXES)
-                    has_digit = any(char.isdigit() for char in first_part_lower)
+        if first_part.startswith(STREET_PREFIXES) and not first_part.startswith(NON_STREET_KEYWORDS):
+            is_street = True
 
-                    if is_detail_prefix or has_digit:
-                        detail_parts = []
-                        for part in parts:
-                            part_lower = part.lower()
-                            if part_lower.startswith(DETAIL_PREFIXES) or any(char.isdigit() for char in part):
-                                detail_parts.append(part)
-                            else:
-                                break
+        if not is_street:
+            # If not street, try to extract detail prefix parts
+            detail_parts = []
+            for part in parts:
+                part_lower = part.lower()
+                if part_lower.startswith(DETAIL_PREFIXES) or re.match(r'^\d+[\/\w-]*', part.strip()):
+                    detail_parts.append(part)
+                else:
+                    break  # Stop once we hit a part that is clearly not a detail prefix
 
-                        if detail_parts:
-                            final = ", ".join(detail_parts).lower()
-                            dp = str(row.get('Đường phố', '')).lower()
-                            if dp:
-                                if dp in final:
-                                    return final.replace(dp, '').title()
-                                return final
-                            return final.title()
+            if not detail_parts:
+                return ""
+
+            final = ", ".join(detail_parts)
+
+            # Remove street-like patterns inside the result
+            # e.g., 'Đường Lê Sát', 'Đường Số 16', etc.
+            final = re.sub(r'\b(đường|hẻm|ngõ|tổ|khu phố|phố|số nhà|nhà|mặt tiền)[^,]*', '', final, flags=re.IGNORECASE)
+
+            dp = str(row.get("Đường phố", "")).strip().lower()
+            if dp:
+                final_lower = final.lower()
+                if dp in final_lower:
+                    final = final_lower.replace(dp, '')
+
+            # Clean up multiple slashes, spaces, etc.
+            final = re.sub(r'\s+', ' ', final)  # Normalize whitespace
+            final = re.sub(r'(^[,\s]+|[,\s]+$)', '', final)  # Trim leading/trailing commas or spaces
+            final = re.sub(r',\s*,+', ',', final)  # Collapse redundant commas
+
+            return final.title()
 
         # --- Step 2: Fallback to searching text for "Mặt phố" or "Mặt đường" ---
-        text_to_search = f"{row.get('title', '')} {row.get('description', '')}".lower()
+        text_to_search = f"{row.get('title', '')}".lower()
         if re.search(r'\b(mặt\s+phố|mặt\s+đường)\b', text_to_search):
             return "Mặt phố"
 

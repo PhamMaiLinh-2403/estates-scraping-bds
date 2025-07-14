@@ -203,4 +203,8 @@ QUALITY_LEVELS = [
 DEFAULT_QUALITY = 0.75
 
 STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ")
-DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ")
+NON_STREET_KEYWORDS = (
+    "phường", "xã", "dự án", "quận", "huyện", "thị trấn",
+    "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ"
+)
+DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án')
