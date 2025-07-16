@@ -198,26 +198,33 @@ def run_cleaning_pipeline():
     df_cleaned = pd.DataFrame(cleaned_records)
 
     try:
+        # Standardize Province and District using the simplified AddressStandardizer
         address_std = AddressStandardizer(
             config.PROVINCES_SQL_FILE,
-            config.DISTRICTS_SQL_FILE,
-            config.STREETS_SQL_FILE
+            config.DISTRICTS_SQL_FILE
         )
         df_cleaned['Tỉnh/Thành phố'] = df_cleaned['Tỉnh/Thành phố'].apply(address_std.standardize_province)
         df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
-        df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(address_std.standardize_street)
-        print("Address standardization complete.")
-
-        # Drop rows where street name could not be standardized to an official name
-        initial_rows_before_street_drop = len(df_cleaned)
-        df_cleaned = df_cleaned.dropna(subset=['Đường phố']).reset_index(drop=True)
-        rows_after_street_drop = len(df_cleaned)
-        dropped_count = initial_rows_before_street_drop - rows_after_street_drop
-        if dropped_count > 0:
-            print(f"  - Dropped {dropped_count} rows with non-standardizable street names.")
-
+        print("Province and District standardization complete.")
     except FileNotFoundError:
-        print("Skipping address standardization because data files were not found.")
+        print("Skipping province/district standardization because data files were not found.")
+
+    # Apply the new street name validation and formatting logic
+    print("Validating and formatting street names...")
+    df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(DataCleaner.validate_and_format_street_name)
+
+    # Drop rows with invalid street names (which are now None)
+    initial_rows_before_street_drop = len(df_cleaned)
+    df_cleaned.dropna(subset=['Đường phố'], inplace=True)
+    df_cleaned.reset_index(drop=True, inplace=True)
+    rows_after_street_drop = len(df_cleaned)
+    dropped_count = initial_rows_before_street_drop - rows_after_street_drop
+
+    if dropped_count > 0:
+        print(f"  - Dropped {dropped_count} rows with invalid or descriptive street names.")
+    else:
+        print("  - All street names were valid.")
+
 
     # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential.
     initial_rows = len(df_cleaned)

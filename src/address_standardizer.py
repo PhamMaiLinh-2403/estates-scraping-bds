@@ -4,18 +4,16 @@ from typing import Optional
 import re
 
 class AddressStandardizer:
-    def __init__(self, provinces_sql_path: str, districts_sql_path: str, streets_sql_path: str):
+    def __init__(self, provinces_sql_path: str, districts_sql_path: str):
         self.reverse_province_map = {}
         self.reverse_district_map = {}
-        self.reverse_street_map = {}
-        self._load_data(provinces_sql_path, districts_sql_path, streets_sql_path)
+        self._load_data(provinces_sql_path, districts_sql_path)
 
-    def _load_data(self, provinces_sql_path: str, districts_sql_path: str, streets_sql_path: str):
+    def _load_data(self, provinces_sql_path: str, districts_sql_path: str):
         try:
             conn = sqlite3.connect(":memory:")
             conn.execute("CREATE TABLE provinces (name TEXT, code TEXT, status TEXT);")
             conn.execute("CREATE TABLE districts (name TEXT, code TEXT, province_code TEXT, status TEXT);")
-            conn.execute("CREATE TABLE streets (name TEXT, code TEXT, district_code TEXT, province_code TEXT, status TEXT);")
 
             with open(provinces_sql_path, "r", encoding="utf-8") as f:
                 conn.executescript(f.read())
@@ -24,28 +22,8 @@ class AddressStandardizer:
                 dis_cleaned = f.read().replace("\\'", "''")
                 conn.executescript(dis_cleaned)
 
-            with open(streets_sql_path, "r", encoding="utf-8") as f:
-                street_raw = f.read()
-
-                # Clean known MySQL-specific blocks
-                cleaned_sql = re.sub(r'/\*!.*?\*/;', '', street_raw, flags=re.DOTALL)
-                cleaned_sql = re.sub(r'LOCK TABLES.*?;', '', cleaned_sql, flags=re.IGNORECASE | re.DOTALL)
-                cleaned_sql = re.sub(r'UNLOCK TABLES;', '', cleaned_sql, flags=re.IGNORECASE)
-                cleaned_sql = cleaned_sql.replace("\\'", "''").replace("\\\\", "\\").replace("\r\n", "\n")
-
-                # Split into individual INSERT statements
-                statements = re.findall(r"INSERT INTO `streets`.*?VALUES\s*\(.*?\);", cleaned_sql, re.DOTALL)
-
-                # Insert each one individually, skipping problematic ones
-                for stmt in statements:
-                    try:
-                        conn.execute(stmt)
-                    except sqlite3.Error:
-                        print(f"⚠️ Skipping malformed line: {stmt[:80]}...")
-
             provinces_df = pd.read_sql_query("SELECT * FROM provinces", conn)
             districts_df = pd.read_sql_query("SELECT * FROM districts", conn)
-            streets_df = pd.read_sql_query("SELECT * FROM streets", conn)
 
         except (FileNotFoundError, sqlite3.Error) as e:
             print(f"❌ Error: Could not load administrative data. Details: {e}")
@@ -67,10 +45,6 @@ class AddressStandardizer:
             for dis in districts_df['name'].unique()
         }
 
-        self.reverse_street_map = {
-            s.replace("Đường ", "").replace("Phố ", ""): s
-            for s in streets_df['name'].unique()
-        }
 
     def standardize_province(self, province_name: Optional[str]) -> Optional[str]:
         if not isinstance(province_name, str):
@@ -92,9 +66,3 @@ class AddressStandardizer:
         if district_name == 'Việt Yên':
             return 'Thị xã Việt Yên'
         return self.reverse_district_map.get(district_name, district_name)
-
-    def standardize_street(self, street_name: Optional[str]) -> Optional[str]:
-        if not isinstance(street_name, str):
-            return None
-        cleaned_name = street_name.replace("Đường ", "").replace("Phố ", "").strip()
-        return self.reverse_street_map.get(cleaned_name, None)

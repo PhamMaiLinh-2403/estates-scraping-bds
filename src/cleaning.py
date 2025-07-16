@@ -23,6 +23,8 @@ from src.config import (
 __all__ = [
     "DataCleaner",
     "drop_mixed_listings",
+    "is_on_main_road",
+    "_parse_and_clean_width"
 ]
 
 
@@ -59,7 +61,7 @@ def is_on_main_road(text: str) -> bool:
     """
     text = text.lower()
 
-    # Negative indicators — mention proximity but not direct access
+    # Negative indicators — mention proximity but not on direct access
     near_but_not_on_patterns = [
         r"(cách|ra|gần|view|đi\s+ra|đi\s+ra\s+đến)\s+(mặt\s+(phố|đường|tiền))",
         r"(view|hướng\s+ra)\s+(mặt\s+(phố|đường|tiền))",
@@ -107,6 +109,41 @@ class DataCleaner:
     """
     Static collection of cleaning / parsing helpers.
     """
+
+    @staticmethod
+    def validate_and_format_street_name(street_name: Optional[str]) -> Optional[str]:
+        """
+        Validates, formats, and cleans a street name according to specific rules.
+        - Returns None if the name is invalid (descriptive, starts with special char).
+        - Adds a "Đường" prefix if missing.
+        """
+        if not street_name or not isinstance(street_name, str):
+            return None
+
+        name = street_name.strip()
+
+        # Rule: Must not start with a special character (non-alphanumeric).
+        # We allow Vietnamese characters via \w.
+        if re.match(r'^[^\w]', name):
+            return None
+
+        # Rule: Invalidate descriptive names like "đường 12m", "đường rộng", "đường ô tô".
+        # We check for a number followed by 'm' or common descriptive words.
+        descriptive_pattern = re.compile(
+            r'\d\s*m(ét)?\b|'          # e.g., "12m", "4 mét"
+            r'\b(rộng|lớn|to|hẹp)\b|'  # e.g., "rộng", "lớn"
+            r'\b(ô\s*tô|oto)\b',       # e.g., "ô tô"
+            re.IGNORECASE
+        )
+        if descriptive_pattern.search(name):
+            return None
+
+        # Rule: If it doesn't have a standard prefix, add "Đường".
+        name_lower = name.lower()
+        if not name_lower.startswith(('đường ', 'phố ')):
+            name = "Đường " + name
+
+        return name
 
     # ----- Basic helpers -----
     @staticmethod
@@ -194,8 +231,11 @@ class DataCleaner:
         if short_address:
             parts = [p.strip() for p in short_address.split(",")]
             for part in parts:
-                # Filter for cases with explicit prefixes "đường", "phố"
-                match = re.search(r'\b(đường|phố)\s+[^\d,]+', part.lower())
+                # --- BUG FIX ---
+                # The old pattern `[^\d,]+` incorrectly stopped at numbers.
+                # The new pattern `[\w\s\-()\/]+` correctly includes alphanumeric
+                # characters (letters AND numbers), hyphens, slashes, and parentheses.
+                match = re.search(r'\b(đường|phố)\s+[\w\s\-()\/]+', part.lower())
                 if match and len(match.group(0).split()) <= 5:
                     return match.group(0).title().strip()
 
@@ -605,7 +645,7 @@ class DataCleaner:
         """
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
-        # === 0. Explicitly on main road
+        # === 0. Explicitly on the main road
         if "mặt phố" in text or "mặt tiền đường lớn" in text:
             return 0.0
 
@@ -670,7 +710,7 @@ class DataCleaner:
             if kw in text:
                 return width
 
-        return float(random.randint(2, 8))
+        return None
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
@@ -724,7 +764,7 @@ class DataCleaner:
             return 25.0
 
         # 4. No match: return a random fallback
-        return float(random.randint(5, 15))
+        return None
 
     @staticmethod
     def extract_direct_features(row: Dict[str, Any]) -> List[str]:
