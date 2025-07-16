@@ -37,7 +37,7 @@ def save_details_to_csv(details, file_path):
         print("No new details to save.")
         return
 
-    # Check if file exists to determine if we need to write the header
+    # Check if the file exists to determine if we need to write the header
     file_exists = os.path.exists(file_path)
 
     # Read the append_mode from config; default to False if not found
@@ -209,22 +209,7 @@ def run_cleaning_pipeline():
     except FileNotFoundError:
         print("Skipping province/district standardization because data files were not found.")
 
-    # Apply the new street name validation and formatting logic
-    print("Validating and formatting street names...")
     df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(DataCleaner.validate_and_format_street_name)
-
-    # Drop rows with invalid street names (which are now None)
-    initial_rows_before_street_drop = len(df_cleaned)
-    df_cleaned.dropna(subset=['Đường phố'], inplace=True)
-    df_cleaned.reset_index(drop=True, inplace=True)
-    rows_after_street_drop = len(df_cleaned)
-    dropped_count = initial_rows_before_street_drop - rows_after_street_drop
-
-    if dropped_count > 0:
-        print(f"  - Dropped {dropped_count} rows with invalid or descriptive street names.")
-    else:
-        print("  - All street names were valid.")
-
 
     # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential.
     initial_rows = len(df_cleaned)
@@ -284,9 +269,9 @@ def run_cleaning_pipeline():
     dropped_count = initial_rows_before_validation - rows_after_validation
 
     if dropped_count > 0:
-        print(f"  - Dropped {dropped_count} rows where facade or length > total area.")
+        print(f"- Dropped {dropped_count} rows where facade or length > total area.")
     else:
-        print("  - All dimensions are valid.")
+        print("- All dimensions are valid.")
 
     final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
     df_final = df_cleaned.reindex(columns=final_columns)

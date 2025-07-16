@@ -1,7 +1,6 @@
 import sqlite3
 import pandas as pd
 from typing import Optional
-import re
 
 class AddressStandardizer:
     def __init__(self, provinces_sql_path: str, districts_sql_path: str):
@@ -26,7 +25,7 @@ class AddressStandardizer:
             districts_df = pd.read_sql_query("SELECT * FROM districts", conn)
 
         except (FileNotFoundError, sqlite3.Error) as e:
-            print(f"❌ Error: Could not load administrative data. Details: {e}")
+            print(f"Error: Could not load administrative data. Details: {e}")
             raise
         finally:
             if 'conn' in locals():

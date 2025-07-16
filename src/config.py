@@ -91,24 +91,24 @@ FINAL_COLUMNS = [
 # Land shape dict: from the most specific shape to the most general shape
 SHAPE_KEYWORDS = {
     # Specific, highly desirable/undesirable features are checked first.
-    'Nở hậu': ['nở hậu'],
-    'Thóp hậu': ['thóp hậu', 'tóp hậu'],
-    'Chữ nhật vát góc': ['vát góc', 'cắt góc'],
+    'Nở hậu': ['nở hậu', 'hậu nở', 'đuôi nở', 'phía sau nở'],
+    'Thóp hậu': ['thóp hậu', 'tóp hậu', 'hậu tóp', 'đuôi tóp'],
+    'Chữ nhật vát góc': ['vát góc', 'cắt góc', 'bo góc', 'xéo góc'],
 
     # Specific letter shapes
     'Chữ L': ['chữ l', 'hình l'],
     'Chữ L hẹp ngang': ['chữ l hẹp', 'hình l hẹp'],
     'Chữ L rộng ngang': ['chữ l rộng', 'hình l rộng'],
-    'Chữ T': ['chữ t', 'hình t'],
-    'Chữ U': ['chữ u', 'hình u'],
+    'Chữ T': ['chữ t', 'hình t', 'thông ngang'],
+    'Chữ U': ['chữ u', 'hình u', 'móng ngựa'],
 
     # Basic geometric shapes
     'Tam giác': ['tam giác'],
-    'Hình quạt': ['hình quạt', 'nan quạt'],
+    'Hình quạt': ['hình quạt', 'nan quạt', 'xòe quạt'],
 
     # Irregular/Complex shapes
     'Đa giác từ 5 cạnh, méo mó': ['méo mó', 'méo'],
-    'Phức tạp, nhiều góc nhọn/tù': ['phức tạp'],
+    'Phức tạp, nhiều góc nhọn/tù': ['nhiều góc nhọn', 'hình dáng phức tạp'],
 
     # Most common/default shape, checked last.
     'Chữ nhật': [
@@ -137,27 +137,6 @@ FACADE_COUNT_MAP = [
         (r'\b1\s+mặt\s+tiền\b', 1),
         (r'\bmột\s+mặt\s+tiền\b', 1),
     ]
-
-# List for extracting features
-FEATURE_KEYWORDS = [
-    # On-Property Features
-    'sân vườn', 'bể bơi', 'hồ bơi', 'gara', 'ga ra', 'hầm để xe', 'chỗ đỗ ô tô',
-    'thang máy', 'giếng trời', 'sân thượng', 'full nội thất',
-
-    # Proximity & Location
-    'gần chợ', 'gần siêu thị', 'gần trường', 'gần bệnh viện', 'gần công viên',
-    'gần hồ', 'gần trung tâm', 'cách chợ', 'cách trường', 'cách mặt phố',
-    'cách đường',
-
-    # Qualitative / Atmospheric Features
-    'view đẹp', 'view hồ', 'view sông', 'view thoáng', 'ba mặt thoáng',
-    'hai mặt thoáng', 'thoáng mát', 'thoáng đãng', 'sáng sủa', 'yên tĩnh',
-    'an ninh tốt',
-
-    # Use & Potential
-    'kinh doanh', 'cho thuê', 'dòng tiền', 'văn phòng', 'kd', 'ô tô tránh',
-    'ô tô vào', 'phân lô',
-]
 
 # Construction cost dict
 CONSTRUCTION_COST_MAP = {
@@ -211,8 +190,8 @@ DEFAULT_QUALITY = 0.75
 
 STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ")
 NON_STREET_KEYWORDS = (
-    "phường", "xã", "dự án", "quận", "huyện", "thị trấn",
-    "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ"
+    "phường", "xã", "dự án", "quận", "huyện", "thị trấn", 'khu'
+    "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ", 'khu dân cư'
 )
 DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án')
 
