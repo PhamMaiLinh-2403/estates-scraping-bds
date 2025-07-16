@@ -195,6 +195,69 @@ def run_cleaning_pipeline():
         cleaned_records.append(processed_data)
 
     df_cleaned = pd.DataFrame(cleaned_records)
+
+    # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential.
+    initial_rows = len(df_cleaned)
+    df_cleaned = df_cleaned.dropna(subset=['Diện tích đất (m2)']).reset_index(drop=True)
+    rows_after_drop = len(df_cleaned)
+
+    if initial_rows > rows_after_drop:
+        print(f"  - Dropped {initial_rows - rows_after_drop} rows with missing 'Diện tích đất (m2)'.")
+
+    # 2. Define helper functions for filling missing values
+    def fill_length(row):
+        area = row['Diện tích đất (m2)']
+        facade = row['Kích thước mặt tiền (m)']
+
+        if pd.isna(facade) or facade == 0:
+            return area ** 0.5
+        else:
+            return area / facade
+
+    def fill_facade(row):
+        area = row['Diện tích đất (m2)']
+        length = row['Kích thước chiều dài (m)']
+
+        if pd.isna(length) or length == 0:
+            return area ** 0.5
+        else:
+            return area / length
+
+    # 3. Impute missing length ('Kích thước chiều dài (m)')
+    mask_length = df_cleaned['Kích thước chiều dài (m)'].isna()
+
+    if mask_length.any():
+        print(f"  - Imputing {mask_length.sum()} missing 'Kích thước chiều dài (m)' values...")
+        df_cleaned.loc[mask_length, 'Kích thước chiều dài (m)'] = df_cleaned.loc[mask_length].apply(fill_length, axis=1)
+
+    # 4. Impute missing facade width ('Kích thước mặt tiền (m)')
+    mask_facade = df_cleaned['Kích thước mặt tiền (m)'].isna()
+
+    if mask_facade.any():
+        print(f"  - Imputing {mask_facade.sum()} missing 'Kích thước mặt tiền (m)' values...")
+        df_cleaned.loc[mask_facade, 'Kích thước mặt tiền (m)'] = df_cleaned.loc[mask_facade].apply(fill_facade, axis=1)
+
+    # 5. Round the imputed values for cleaner data
+    df_cleaned['Kích thước chiều dài (m)'] = df_cleaned['Kích thước chiều dài (m)'].round(2)
+    df_cleaned['Kích thước mặt tiền (m)'] = df_cleaned['Kích thước mặt tiền (m)'].round(2)
+
+    initial_rows_before_validation = len(df_cleaned)
+
+    # Create a mask for rows where dimensions are illogical
+    mask_invalid_dimensions = (df_cleaned['Kích thước mặt tiền (m)'] > df_cleaned['Diện tích đất (m2)']) | \
+                              (df_cleaned['Kích thước chiều dài (m)'] > df_cleaned['Diện tích đất (m2)'])
+
+    # Filter out the invalid rows
+    df_cleaned = df_cleaned[~mask_invalid_dimensions].reset_index(drop=True)
+
+    rows_after_validation = len(df_cleaned)
+    dropped_count = initial_rows_before_validation - rows_after_validation
+
+    if dropped_count > 0:
+        print(f"- Dropped {dropped_count} rows where facade or length > total area.")
+    else:
+        print("- All dimensions are valid.")
+
     final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
     df_final = df_cleaned.reindex(columns=final_columns)
 
