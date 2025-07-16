@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import re
 from typing import Any, Dict, List, Optional
-import random
 
 import numpy as np
 import pandas as pd
@@ -90,15 +89,18 @@ def _parse_and_clean_width(text_value: Any) -> Optional[float]:
     if not isinstance(text_value, str):
         return None
     match = re.search(r"([\d\.,]+)", text_value)
+
     if not match:
         return None
     num_str = match.group(1)
+
     if "," in num_str:
         cleaned_num_str = num_str.replace(".", "").replace(",", ".")
     else:
         cleaned_num_str = num_str
     try:
         value = float(cleaned_num_str)
+
         if value > 20:
             value = float(num_str.replace(",", ""))  # handle commas as thousands separator
         return round(value, 2)
@@ -231,10 +233,6 @@ class DataCleaner:
         if short_address:
             parts = [p.strip() for p in short_address.split(",")]
             for part in parts:
-                # --- BUG FIX ---
-                # The old pattern `[^\d,]+` incorrectly stopped at numbers.
-                # The new pattern `[\w\s\-()\/]+` correctly includes alphanumeric
-                # characters (letters AND numbers), hyphens, slashes, and parentheses.
                 match = re.search(r'\b(đường|phố)\s+[\w\s\-()\/]+', part.lower())
                 if match and len(match.group(0).split()) <= 5:
                     return match.group(0).title().strip()
