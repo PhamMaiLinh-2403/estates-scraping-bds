@@ -164,7 +164,7 @@ QUALITY_LEVELS = [
         'vừa xây xong', 'mới bàn giao', 'mới nhận nhà',
         'chưa ở lần nào', 'nhà mới tinh', 'nhà mới toanh',
         'nhà xây mới', 'vừa hoàn thiện', 'còn thơm mùi sơn',
-        'hoàn công', 'nhà xây kiên cố', 'đảm bảo kết cấu mới',
+        'mới hoàn công', 'nhà xây kiên cố', 'đảm bảo kết cấu mới',
     ]),
 
     # Priority 3: Old or needs significant repair (50%)
@@ -191,7 +191,8 @@ DEFAULT_QUALITY = 0.75
 STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ")
 NON_STREET_KEYWORDS = (
     "phường", "xã", "dự án", "quận", "huyện", "thị trấn", 'khu'
-    "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ", 'khu dân cư'
+    "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ",
+    "khu đô thị", "khu nhà ở", "kdc", 'khu dân cư',
 )
 DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án')
 

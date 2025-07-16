@@ -60,23 +60,25 @@ def is_on_main_road(text: str) -> bool:
     """
     text = text.lower()
 
-    # Negative indicators — mention proximity but not on direct access
+    # === 1. Negative indicators — property is NEAR but not ON main road
     near_but_not_on_patterns = [
-        r"(cách|ra|gần|view|đi\s+ra|đi\s+ra\s+đến)\s+(mặt\s+(phố|đường|tiền))",
-        r"(view|hướng\s+ra)\s+(mặt\s+(phố|đường|tiền))",
+        r"(cách|ra|gần|view|hướng\s+ra|đi\s+ra|đi\s+ra\s+đến)\s+(mặt\s+(phố|đường|tiền))",
+        r"(view|hướng\s+ra)\s+(phố|đường|mặt\s+phố)",
         r"\b\d{1,3}\s*m(?:ét)?\s*(tới|ra|cách)\s+(mặt\s+(phố|đường|tiền))",
-        r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))"
+        r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))",
+        r"(gần|kế|bên cạnh)\s+(phố|đường|mặt\s+phố|mặt\s+tiền)"
     ]
     for pat in near_but_not_on_patterns:
         if re.search(pat, text):
             return False
 
-    # Positive indicators — direct mentions of being ON a main road
+    # === 2. Positive indicators — property is ON a main road
     direct_main_road_patterns = [
-        r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc)\s+(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
-        r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc)\s+(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
+        r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc|căn hộ)?\s*(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
+        r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc|căn hộ)?\s*(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
         r"(mặt\s+(phố|tiền|đường))\s+(chính|lớn|kinh\s+doanh|sầm\s+uất)",
-        r"nhà\s+(nằm\s+)?trên\s+(phố|đường)\s+(lớn|chính|kinh\s+doanh)"
+        r"(tọa lạc|nằm)\s+(trên|tại)\s+(mặt\s+phố|mặt\s+tiền|phố|đường\s+chính|phố\s+lớn)",
+        r"\b(mặt\s+tiền|mặt\s+phố|phố\s+lớn|đường\s+chính)\b.*?(kinh\s+doanh|đắt\s+đỏ|thuận\s+tiện)"
     ]
     for pat in direct_main_road_patterns:
         if re.search(pat, text):
@@ -129,9 +131,9 @@ class DataCleaner:
         # Rule: Invalidate descriptive names like "đường 12m", "đường rộng", "đường ô tô".
         # We check for a number followed by 'm' or common descriptive words.
         descriptive_pattern = re.compile(
-            r'\d\s*m(ét)?\b|'          # e.g., "12m", "4 mét"
+            r'\d+\s*(m(2|²)|mét|m)?\b|'     # area (e.g. 70m2, 70 m², 70 mét)
             r'\b(rộng|lớn|to|hẹp)\b|'  
-            r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-)\b'
+            r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-)\b|'
             r'\b(ô\s*tô|oto)\b',
             re.IGNORECASE
         )
@@ -635,9 +637,9 @@ class DataCleaner:
         Extract alley width from listing title and description.
         Priority:
             1. Return 0.0 if on main road ("mặt phố")
-            2. Extract explicit numeric width
-            3. Infer from vehicle clues
-            4. Use descriptive clues as fallback
+            2. Extract explicit numeric width tied to alley
+            3. Infer from vehicle access
+            4. Use descriptive fallback
         """
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
@@ -645,19 +647,20 @@ class DataCleaner:
         if "mặt phố" in text or "mặt tiền đường lớn" in text:
             return 0.0
 
-        # === 1. Try extracting numeric width via regex
         alley_kw = r"(ngõ|hẻm|ngách|kiệt|đường\s+vào|lối\s+vào|trước\s+nhà|đường\s+trước\s+nhà)"
         vehicle_kw = r"(oto|ô\s*tô|xe\s+hơi|xe\s+tải|ba\s+gác|xe\s+máy)"
         approx_kw = r"(rộng\s*)?(khoảng|gần|trên\s+dưới|tầm|xấp\s+xỉ)?\s*"
-        num_pat = r"(\d{1,3}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"
+        num_pat = r"(\d{1,2}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"  # limit to 1-2 digit widths
 
         widths: List[float] = []
 
+        # Focus only on patterns that closely associate width and alley context
         patterns = [
-            rf"{alley_kw}[\s:–\-]{0, 5}{approx_kw}{num_pat}",  # "hẻm trước nhà 4m"
-            rf"{approx_kw}{num_pat}[\s\-:]{0, 5}{alley_kw}",  # "4m hẻm trước nhà"
-            rf"{alley_kw}[\s\-:]{0, 5}{vehicle_kw}[\s\-:]{0, 5}{approx_kw}{num_pat}",  # "hẻm xe hơi 4m"
-            rf"{approx_kw}{num_pat}[\s\-:]{0, 5}{vehicle_kw}[\s\-:]{0, 5}{alley_kw}",  # "4m xe tải ngõ"
+            rf"{alley_kw}.*?{approx_kw}{num_pat}",  # hẻm rộng 3m, ngõ 2,5m
+            rf"{approx_kw}{num_pat}.*?{alley_kw}",  # 2,5m ngõ trước nhà
+            rf"{alley_kw}.*?{vehicle_kw}.*?{approx_kw}{num_pat}",  # hẻm ô tô rộng 4m
+            rf"{approx_kw}{num_pat}.*?{vehicle_kw}.*?{alley_kw}",  # 4m xe hơi hẻm
+            rf"tiếp giáp\s+{alley_kw}.*?{approx_kw}{num_pat}",  # tiếp giáp hẻm rộng 3m
         ]
 
         for pattern in patterns:
@@ -671,9 +674,9 @@ class DataCleaner:
                     widths.append(width)
 
         if widths:
-            return min(widths)
+            return min(widths) if min(widths) < 15 else None
 
-        # === 2. Infer width based on vehicle access
+        # === 2. Infer from vehicle clues
         vehicle_fallback = [
             ("xe tải tránh", 10.0),
             ("ô tô tránh", 5.0),
@@ -693,7 +696,7 @@ class DataCleaner:
         ]
         for kw, width in vehicle_fallback:
             if kw in text:
-                return width
+                return width if width < 15 else None
 
         # === 3. Descriptive fallback
         descriptive_fallback = [
