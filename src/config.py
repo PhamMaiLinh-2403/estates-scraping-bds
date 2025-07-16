@@ -44,6 +44,12 @@ DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details.csv"
 CLEANED_DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details_cleaned.csv"
 FEATURE_ENGINEERED_OUTPUT_FILE = f"{OUTPUT_DIR}/feature_engineered_listings.xlsx"
 
+# Administrative data paths
+ADMIN_DATA_DIR = "Dữ liệu địa giới hành chính"
+PROVINCES_SQL_FILE = f"{ADMIN_DATA_DIR}/provinces_20250225_2.sql"
+DISTRICTS_SQL_FILE = f"{ADMIN_DATA_DIR}/districts_20250225_2.sql"
+
+
 # Final columns of output
 FINAL_COLUMNS = [
     'Tỉnh/Thành phố',

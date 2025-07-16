@@ -10,6 +10,7 @@ from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
 from src.cleaning import DataCleaner, drop_mixed_listings
 from src.feature_engineering import FeatureEngineer
+from src.address_standardizer import AddressStandardizer
 from src import config
 
 
@@ -196,6 +197,14 @@ def run_cleaning_pipeline():
 
     df_cleaned = pd.DataFrame(cleaned_records)
 
+    try:
+        address_std = AddressStandardizer(config.PROVINCES_SQL_FILE, config.DISTRICTS_SQL_FILE)
+        df_cleaned['Tỉnh/Thành phố'] = df_cleaned['Tỉnh/Thành phố'].apply(address_std.standardize_province)
+        df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
+        print("Address standardization complete.")
+    except FileNotFoundError:
+        print("Skipping address standardization because data files were not found.")
+
     # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential.
     initial_rows = len(df_cleaned)
     df_cleaned = df_cleaned.dropna(subset=['Diện tích đất (m2)']).reset_index(drop=True)
@@ -254,9 +263,9 @@ def run_cleaning_pipeline():
     dropped_count = initial_rows_before_validation - rows_after_validation
 
     if dropped_count > 0:
-        print(f"- Dropped {dropped_count} rows where facade or length > total area.")
+        print(f"  - Dropped {dropped_count} rows where facade or length > total area.")
     else:
-        print("- All dimensions are valid.")
+        print("  - All dimensions are valid.")
 
     final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
     df_final = df_cleaned.reindex(columns=final_columns)
