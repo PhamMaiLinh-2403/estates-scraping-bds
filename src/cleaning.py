@@ -84,7 +84,6 @@ def is_on_main_road(text: str) -> bool:
 
     return False
 
-
 def _parse_and_clean_width(text_value: Any) -> Optional[float]:
     if not isinstance(text_value, str):
         return None
@@ -116,8 +115,6 @@ class DataCleaner:
     def validate_and_format_street_name(street_name: Optional[str]) -> Optional[str]:
         """
         Validates, formats, and cleans a street name according to specific rules.
-        - Returns None if the name is invalid (descriptive, starts with special char).
-        - Adds a "Đường" prefix if missing.
         """
         if not street_name or not isinstance(street_name, str):
             return None
@@ -133,8 +130,9 @@ class DataCleaner:
         # We check for a number followed by 'm' or common descriptive words.
         descriptive_pattern = re.compile(
             r'\d\s*m(ét)?\b|'          # e.g., "12m", "4 mét"
-            r'\b(rộng|lớn|to|hẹp)\b|'  # e.g., "rộng", "lớn"
-            r'\b(ô\s*tô|oto)\b',       # e.g., "ô tô"
+            r'\b(rộng|lớn|to|hẹp)\b|'  
+            r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-)\b'
+            r'\b(ô\s*tô|oto)\b',
             re.IGNORECASE
         )
         if descriptive_pattern.search(name):
