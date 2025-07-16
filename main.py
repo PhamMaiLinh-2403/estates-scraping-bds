@@ -198,10 +198,24 @@ def run_cleaning_pipeline():
     df_cleaned = pd.DataFrame(cleaned_records)
 
     try:
-        address_std = AddressStandardizer(config.PROVINCES_SQL_FILE, config.DISTRICTS_SQL_FILE)
+        address_std = AddressStandardizer(
+            config.PROVINCES_SQL_FILE,
+            config.DISTRICTS_SQL_FILE,
+            config.STREETS_SQL_FILE
+        )
         df_cleaned['Tỉnh/Thành phố'] = df_cleaned['Tỉnh/Thành phố'].apply(address_std.standardize_province)
         df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
+        df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(address_std.standardize_street)
         print("Address standardization complete.")
+
+        # Drop rows where street name could not be standardized to an official name
+        initial_rows_before_street_drop = len(df_cleaned)
+        df_cleaned = df_cleaned.dropna(subset=['Đường phố']).reset_index(drop=True)
+        rows_after_street_drop = len(df_cleaned)
+        dropped_count = initial_rows_before_street_drop - rows_after_street_drop
+        if dropped_count > 0:
+            print(f"  - Dropped {dropped_count} rows with non-standardizable street names.")
+
     except FileNotFoundError:
         print("Skipping address standardization because data files were not found.")
 
@@ -283,9 +297,21 @@ def run_feature_engineering():
     print(f"Reading cleaned data from '{config.CLEANED_DETAILS_OUTPUT_FILE}'...")
     df = pd.read_csv(config.CLEANED_DETAILS_OUTPUT_FILE)
 
+    print("Engineering new features: 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất'...")
     df['Giá ước tính'] = df.apply(lambda row: FeatureEngineer.calculate_estimated_price(row.to_dict()), axis=1)
     df['Lợi thế kinh doanh'] = df.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
     df['Đơn giá đất'] = df.apply(lambda row: FeatureEngineer.calculate_land_unit_price(row.to_dict()), axis=1)
+
+    initial_rows = len(df)
+    df.dropna(subset=['Đơn giá đất'], inplace=True)
+    df.reset_index(drop=True, inplace=True)
+
+    rows_after_drop = len(df)
+    dropped_count = initial_rows - rows_after_drop
+    if dropped_count > 0:
+        print(f"  - Dropped {dropped_count} rows with missing 'Đơn giá đất' values.")
+    else:
+        print("  - No rows dropped due to missing 'Đơn giá đất'.")
 
     # Ensure the final column order is correct
     df_final = df.reindex(columns=config.FINAL_COLUMNS)
