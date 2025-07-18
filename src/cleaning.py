@@ -548,7 +548,7 @@ class DataCleaner:
                 return None
 
             # Regex to find keywords for width followed by a number
-            m = re.search(r"(?:mặt tiền|chiều rộng|chiều ngang|rộng|ngang)\s*:?\s*([\d.,m]+)", text.lower())
+            m = re.search(r"(?:mặt tiền|chiều rộng|chiều ngang|rộng|ngang)\s*:?\s*([\d.,]+\s*m)\b", text.lower())
 
             if m:
                 return parse_and_clean_width(m.group(1))
