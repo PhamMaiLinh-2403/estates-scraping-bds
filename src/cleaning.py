@@ -619,17 +619,18 @@ class DataCleaner:
                 return None
 
             text_l = text.lower()
-            m = re.search(r"(?:dài|chiều\s+dài)\s*:?\s*([\d.,m]+)", text_l)
+
+            m = re.search(r"(?:dài|chiều\s+dài)\s*:?\s*([\d.,]+)", text_l)
             if m:
                 return DataCleaner._parse_and_clean_number(m.group(1))
 
-            m = re.search(r"(\d+[\.,m]?\d*)\s*(?:m|mét)?\s*[xX*]\s*(\d+[\.,m]?\d*)", text_l)
-            if m:
-                nums = [DataCleaner._parse_and_clean_number(n) for n in m.groups()]
-                if all(n is not None for n in nums):
-                    # Here, we assume the larger dimension is the length
-                    valid_nums = [n for n in nums if n is not None]
-                    return max(valid_nums) if valid_nums else None
+            m2 = re.search(r"(?:diện\s+tích|dt)[:\s]*([\d.,]+)\s*x\s*([\d.,]+)", text_l)
+            if m2:
+                num1 = DataCleaner._parse_and_clean_number(m2.group(1))
+                num2 = DataCleaner._parse_and_clean_number(m2.group(2))
+                if num1 is not None and num2 is not None:
+                    return max(num1, num2)
+
             return None
 
         try:
@@ -659,7 +660,7 @@ class DataCleaner:
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
         # === 0. Explicitly on the main road
-        if "mặt phố" in text or "mặt tiền đường lớn" in text:
+        if is_on_main_road(text):
             return 0.0
 
         alley_kw = r"(ngõ|hẻm|ngách|kiệt|đường\s+vào|lối\s+vào|trước\s+nhà|đường\s+trước\s+nhà)"
@@ -715,7 +716,7 @@ class DataCleaner:
             ("hẻm ô tô", 4.0),
             ("hẻm xe hơi", 4.0),
             ("ngõ ô tô", 4.0),
-            ("trước nhà ô tô", 4.0),
+            ("ô tô đỗ", 4.0),
             ("ba gác", 2.5),
             ("xe máy tránh", 2.5),
         ]
