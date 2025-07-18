@@ -23,7 +23,7 @@ __all__ = [
     "DataCleaner",
     "drop_mixed_listings",
     "is_on_main_road",
-    "_parse_and_clean_width"
+    "parse_and_clean_width"
 ]
 
 
@@ -66,8 +66,15 @@ def is_on_main_road(text: str) -> bool:
         r"(view|hướng\s+ra)\s+(phố|đường|mặt\s+phố)",
         r"\b\d{1,3}\s*m(?:ét)?\s*(tới|ra|cách)\s+(mặt\s+(phố|đường|tiền))",
         r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))",
-        r"(gần|kế|bên cạnh)\s+(phố|đường|mặt\s+phố|mặt\s+tiền)"
+        r"(gần|kế|bên cạnh)\s+(phố|đường|mặt\s+phố|mặt\s+tiền)",
+        r"(cách|ra|gần|view|hướng\s+ra|đi\s+ra|đi\s+ra\s+đến)\s+(phố|đường|tiền)",
+        r"(view|hướng\s+ra)\s+(phố|đường)",
+        r"\b\d{1,3}\s*m(?:ét)?\s*(đến|tới|ra|cách)\s+(phố|đường|tiền)",
+        r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(phố|đường|tiền)",
+        r"(gần|kế|bên cạnh)\s+(phố|đường)",
+        r"\b\d{1,3}\s*m\s*(cách|ra|tới|đến)?\s*(phố|đường|tiền)"
     ]
+
     for pat in near_but_not_on_patterns:
         if re.search(pat, text):
             return False
@@ -76,21 +83,21 @@ def is_on_main_road(text: str) -> bool:
     direct_main_road_patterns = [
         r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc|căn hộ)?\s*(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
         r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc|căn hộ)?\s*(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
-        r"(mặt\s+(phố|tiền|đường))\s+(chính|lớn|kinh\s+doanh|sầm\s+uất)",
-        r"(tọa lạc|nằm)\s+(trên|tại)\s+(mặt\s+phố|mặt\s+tiền|phố|đường\s+chính|phố\s+lớn)",
-        r"\b(mặt\s+tiền|mặt\s+phố|phố\s+lớn|đường\s+chính)\b.*?(kinh\s+doanh|đắt\s+đỏ|thuận\s+tiện)"
+        r"(nằm|tọa lạc)\s+(trên|tại)\s+trục\s+(đường|phố)\s+(chính|lớn)",
+        r"(nhà|biệt thự|căn nhà|căn hộ)\s+phố"
     ]
+
     for pat in direct_main_road_patterns:
         if re.search(pat, text):
             return True
 
     return False
 
-def _parse_and_clean_width(text_value: Any) -> Optional[float]:
+def parse_and_clean_width(text_value: Any) -> Optional[float]:
     if not isinstance(text_value, str):
         return None
-    match = re.search(r"([\d\.,]+)", text_value)
 
+    match = re.search(r"([\d\.,]+)", text_value)
     if not match:
         return None
     num_str = match.group(1)
@@ -103,7 +110,7 @@ def _parse_and_clean_width(text_value: Any) -> Optional[float]:
         value = float(cleaned_num_str)
 
         if value > 20:
-            value = float(num_str.replace(",", ""))  # handle commas as thousands separator
+            value = float(num_str.replace(",", ""))  
         return round(value, 2)
     except (ValueError, TypeError):
         return None
@@ -133,7 +140,7 @@ class DataCleaner:
         descriptive_pattern = re.compile(
             r'\d+\s*(m(2|²)|mét|m)?\b|'     # area (e.g. 70m2, 70 m², 70 mét)
             r'\b(rộng|lớn|to|hẹp)\b|'  
-            r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-)\b|'
+            r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-|vip|ẩm thực)\b|'
             r'\b(ô\s*tô|oto)\b',
             re.IGNORECASE
         )
@@ -544,14 +551,14 @@ class DataCleaner:
 
             if m:
                 # Use the class's number parsing utility
-                return _parse_and_clean_width(m.group(1))
+                return parse_and_clean_width(m.group(1))
             return None
 
         # --- Step 1: Check structured 'other_info' JSON field first ---
         try:
             other_info_json = row.get("other_info", "{}") or "{}"
             val = json.loads(other_info_json).get("Mặt tiền")
-            w = _parse_and_clean_width(val)
+            w = parse_and_clean_width(val)
             if w is not None:
                 return w
         except (json.JSONDecodeError, TypeError):
@@ -656,11 +663,20 @@ class DataCleaner:
 
         # Focus only on patterns that closely associate width and alley context
         patterns = [
-            rf"{alley_kw}.*?{approx_kw}{num_pat}",  # hẻm rộng 3m, ngõ 2,5m
-            rf"{approx_kw}{num_pat}.*?{alley_kw}",  # 2,5m ngõ trước nhà
-            rf"{alley_kw}.*?{vehicle_kw}.*?{approx_kw}{num_pat}",  # hẻm ô tô rộng 4m
-            rf"{approx_kw}{num_pat}.*?{vehicle_kw}.*?{alley_kw}",  # 4m xe hơi hẻm
-            rf"tiếp giáp\s+{alley_kw}.*?{approx_kw}{num_pat}",  # tiếp giáp hẻm rộng 3m
+            # e.g., "ngõ rộng 3m", "hẻm khoảng 2.5 mét", "kiệt 2,5m"
+            rf"\b{alley_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
+
+            # e.g., "rộng 2.5m ngõ trước nhà", "2m ngõ nhỏ", "3,5 mét hẻm"
+            rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{0, 20}\b{alley_kw}\b",
+
+            # e.g., "ngõ ô tô vào rộng 3m", "hẻm xe hơi gần 4m"
+            rf"\b{alley_kw}\b[^.,;:\n\r]{0, 30}\b{vehicle_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
+
+            # e.g., "4m xe hơi vào hẻm"
+            rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{0, 20}\b{vehicle_kw}\b[^.,;:\n\r]{0, 30}\b{alley_kw}\b",
+
+            # e.g., "tiếp giáp hẻm rộng 3m"
+            rf"\btiếp giáp\b[^.,;:\n\r]{0, 20}\b{alley_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
         ]
 
         for pattern in patterns:
@@ -669,9 +685,10 @@ class DataCleaner:
                     num_str = next((m for m in match if re.match(r"^\d", m)), None)
                 else:
                     num_str = match
-                width = _parse_and_clean_width(num_str)
+                width = parse_and_clean_width(num_str)
                 if width:
                     widths.append(width)
+
 
         if widths:
             return min(widths) if min(widths) < 15 else None
@@ -720,41 +737,50 @@ class DataCleaner:
             return round(cleaned_num * 1000 if unit.lower() == "km" else cleaned_num, 2)
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-
         if not text.strip():
             return None
 
-        # 1. Direct check if the property is on a main road
+        # === 1. If it's directly on a main road
         if is_on_main_road(text):
             return 0.0
 
-        # 2. Match patterns like "cách mặt phố 30m" or "30m tới đường lớn" but avoid irrelevant location names
-        road_kw = r"(mặt\s+phố|đường\s+lớn|đường\s+chính|trục\s+chính|đường\s+ô\s*tô|phố|đường)"
-        unit_kw = r"(km|mét|m)?"
-        dist_cap = r"(\d{1,3}(?:[\.,]\d{1,3})?)\s*" + unit_kw
+        # === 2. Regex Patterns
+        # Allow these road keywords
+        road_prefixes = [
+            r"đường\s+[a-z0-9/]+",  # e.g., đường 23/10, đường số 5
+            r"phố\s+[a-z0-9/]+",
+            r"trục\s+chính", r"đường\s+lớn", r"đường\s+chính",
+            r"đường\s+ô\s*tô", r"mặt\s+phố", r"mặt\s+tiền"
+        ]
+        road_kw = f"(?:{'|'.join(road_prefixes)})"
 
-        # Avoid these false matches
-        ignore_kw = r"(quận|phường|thành phố|cửa\s+biển|lăng|chợ|hồ|trường|bệnh viện|chùa|khu\s+vực)"
+        # Units and number pattern
+        unit_kw = r"(km|m|mét)?"
+        dist_cap = r"(\d{1,3}(?:[\.,]\d{1,2})?)\s*" + unit_kw
 
-        patt1 = rf"{road_kw}.*?(?:cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}"
-        patt2 = rf"(?:cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}\s*(?:đến|tới|ra)?\s*{road_kw}"
+        # Avoid matching these points of interest
+        place_of_interest = r"(bigc|vincom|trường|chợ|bệnh viện|công viên|khu\s+vui\s+chơi|tttm|siêu thị|trung\s+tâm|sân\s+vận\s+động|bến\s+xe|cafe|nhà\s+hàng)"
+
+        # Main patterns
+        patt1 = rf"{road_kw}.*?(cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}"
+        patt2 = rf"(cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}\s*(đến|tới|ra)?\s*{road_kw}"
 
         matches = re.findall(patt1, text) + re.findall(patt2, text)
         dists = []
 
         for match in matches:
             match_text = " ".join(match)
-            if re.search(ignore_kw, match_text):  # Skip if near points of interest
+            if re.search(place_of_interest, match_text):  # Skip places like BigC, Vincom...
                 continue
-            num, unit = match[0], match[1] or "m"
+            num, unit = match[1], match[2] or "m"
             converted = _convert(num, unit)
-            if converted is not None and 0 < converted < 1000:  # Set a reasonable range
+            if converted is not None and 0 < converted < 1000:
                 dists.append(converted)
 
         if dists:
             return min(dists)
 
-        # 3. Try to infer from common phrases
+        # === 3. Phrase-based inference
         if re.search(r"(ngõ\s+nông|ngõ\s+rộng|ngõ\s+thoáng|ngõ\s+gần\s+đường)", text):
             return 10.0
         if re.search(r"(ngõ\s+xe\s+máy|ngõ\s+hẹp)", text):
@@ -762,7 +788,6 @@ class DataCleaner:
         if re.search(r"(trong\s+ngõ|trong\s+hẻm)", text):
             return 25.0
 
-        # 4. No match: return a random fallback
         return None
 
     @staticmethod
