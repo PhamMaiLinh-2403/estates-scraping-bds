@@ -759,7 +759,8 @@ class DataCleaner:
             r"đường\s+[a-z0-9/]+",  # e.g., đường 23/10, đường số 5
             r"phố\s+[a-z0-9/]+",
             r"trục\s+chính", r"đường\s+lớn", r"đường\s+chính",
-            r"đường\s+ô\s*tô", r"mặt\s+phố", r"mặt\s+tiền"
+            r"đường\s+ô\s*tô", r"mặt\s+phố", r"mặt\s+tiền",
+            "ô tô đỗ", "chỗ đỗ xe"
         ]
         road_kw = f"(?:{'|'.join(road_prefixes)})"
 
