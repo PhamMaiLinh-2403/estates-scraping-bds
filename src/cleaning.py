@@ -110,7 +110,7 @@ def parse_and_clean_width(text_value: Any) -> Optional[float]:
         value = float(cleaned_num_str)
 
         if value > 20:
-            value = float(num_str.replace(",", ""))  
+            value = float(num_str.replace(",", ""))
         return round(value, 2)
     except (ValueError, TypeError):
         return None
@@ -120,6 +120,7 @@ class DataCleaner:
     Static collection of cleaning / parsing helpers.
     """
 
+    # ----- Validators -----
     @staticmethod
     def validate_and_format_street_name(street_name: Optional[str]) -> Optional[str]:
         """
@@ -131,14 +132,13 @@ class DataCleaner:
         name = street_name.strip()
 
         # Rule: Must not start with a special character (non-alphanumeric).
-        # We allow Vietnamese characters via \w.
         if re.match(r'^[^\w]', name):
             return None
 
         # Rule: Invalidate descriptive names like "đường 12m", "đường rộng", "đường ô tô".
         # We check for a number followed by 'm' or common descriptive words.
         descriptive_pattern = re.compile(
-            r'\d+\s*(m(2|²)|mét|m)?\b|'     # area (e.g. 70m2, 70 m², 70 mét)
+            r'\d+\s*(m(2|²)|mét|m)?\b|'     
             r'\b(rộng|lớn|to|hẹp)\b|'  
             r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-|vip|ẩm thực)\b|'
             r'\b(ô\s*tô|oto)\b',
@@ -278,7 +278,6 @@ class DataCleaner:
         Extracts specific address details like house/alley numbers.
         If not available, determine if it's 'Mặt phố' or 'Mặt ngõ'.
         """
-
         short_address = str(row.get("short_address", "")).strip()
 
         parts = [p.strip() for p in short_address.split(',') if p.strip()]
@@ -391,17 +390,6 @@ class DataCleaner:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-        if pd.notna(row.get("description")):
-            text = str(row["description"])
-            patterns = [r"(?i)(?:diện tích|dt)[:\s]*([\d\.,]+)\s*m[²2]", r"([\d\.,]+)\s*m[²2]"]
-
-            for p in patterns:
-                m = re.search(p, text)
-                if m:
-                    area = DataCleaner._parse_and_clean_number(m.group(1))
-                    if pd.notna(area):
-                        return area
-
         return np.nan
 
     @staticmethod
@@ -436,10 +424,19 @@ class DataCleaner:
             "chín": 9, "mười": 10,
         }
         num_words_pattern = "|".join(word_to_num.keys())
-        potential_numbers = {
-            int(n)
-            for n in re.findall(r"(?:cải\s+tạo\s+lên|xây\s+lên|nâng\s+tầng\s+lên|xin\s+phép\s+xây)\s*(\d+)", text)
-        }  # For filtering out potential numbers of a building, since we only care about actual number
+        potential_numbers = re.findall(
+            r"(?:"
+            r"cải\s+tạo\s+lên|"  # cải tạo lên 4
+            r"xây\s+lên|"  # xây lên 3
+            r"nâng\s+tầng\s+lên|"  # nâng tầng lên 5
+            r"xin\s+phép\s+xây|"  # xin phép xây 6
+            r"có\s+thể\s+lên|"  # có thể lên 4
+            r"có\s+khả\s+năng\s+xây|"  # có khả năng xây 7
+            r"móng(?:\s+cứng)?|"  # móng 7 tầng, móng cứng 8 tầng
+            r"thiết\s+kế\s+lên\s+tới"  # thiết kế lên tới 5 tầng
+            r")\s*(\d+)",
+            text
+        )        # For filtering out potential numbers of a building, since we only care about actual number
         candidate_numbers: List[int] = []
 
         for num_str in re.findall(rf"(\d+|{num_words_pattern})\s*(?:tầng|lầu|tấm|mê)", text):
@@ -450,8 +447,8 @@ class DataCleaner:
 
         actual = [n for n in candidate_numbers if n not in potential_numbers]
 
-        if "lầu" in text and any(k in text for k in ["trệt", "lửng"]):
-            extra = ("trệt" in text) + ("lửng" in text)
+        if "lầu" in text and any(k in text for k in ["trệt", "lửng", "gác mái"]):
+            extra = ("trệt" in text) + ("lửng" in text) + ("gác mái" in text)
             if actual:
                 return max(actual) + extra
         if actual:

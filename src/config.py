@@ -188,13 +188,13 @@ QUALITY_LEVELS = [
 
 DEFAULT_QUALITY = 0.75
 
-STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ")
+STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ", "vành đai")
 NON_STREET_KEYWORDS = (
     "phường", "xã", "dự án", "quận", "huyện", "thị trấn", 'khu'
     "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ",
     "khu đô thị", "khu nhà ở", "kdc", 'khu dân cư',
 )
-DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án')
+DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án ')
 
 NEGATION_PATTERNS = [
     r"không\s+{}",
