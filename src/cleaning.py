@@ -465,9 +465,13 @@ class DataCleaner:
         def _prop_type() -> str:
             """More careful property type detection."""
             text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-            if re.search(r"\bbán\s+(căn\s+)?biệt\s+thự\b", text) or re.search(r"\bnhà\s+(kiểu\s+)?biệt\s+thự\b",
-                                                                              text):
-                return "biệt thự"
+            if (
+                    re.search(r"\bbán\s+(căn\s+)?biệt\s+thự\b", text) or
+                    re.search(r"\bnhà\s+(kiểu\s+)?biệt\s+thự\b", text) or
+                    re.search(r"\b(căn\s+)?biệt\s+thự\s+(đơn\s+lập|sân\s+vườn|vườn|cao\s+cấp|đẹp|view|4\s+mặt)\b", text)
+            ):
+                if not re.search(r"\b(liền\s+kề|gần|cách|khu|đối\s+diện|thuộc|gần\s+khu)\s+biệt\s+thự\b", text):
+                    return "biệt thự"
             if re.search(r"\bnhà\s+cấp\s*4\b", text):
                 return "nhà cấp 4"
             return "nhà thường"
@@ -544,10 +548,9 @@ class DataCleaner:
                 return None
 
             # Regex to find keywords for width followed by a number
-            m = re.search(r"(?:mặt tiền|chiều rộng|chiều ngang)\s*:?\s*([\d.,m]+)", text.lower())
+            m = re.search(r"(?:mặt tiền|chiều rộng|chiều ngang|rộng|ngang)\s*:?\s*([\d.,m]+)", text.lower())
 
             if m:
-                # Use the class's number parsing utility
                 return parse_and_clean_width(m.group(1))
             return None
 
@@ -565,7 +568,6 @@ class DataCleaner:
         try:
             main_info_json = row.get("main_info", "[]") or "[]"
             for it in json.loads(main_info_json):
-                # Check for area info that often contains dimensions in the 'ext' field
                 if it.get("title") == "Diện tích" and it.get("ext"):
                     w = _find(it["ext"])
                     if w is not None:
@@ -573,14 +575,23 @@ class DataCleaner:
         except (json.JSONDecodeError, TypeError):
             pass
 
-        # --- Step 3: Fallback to searching free-text fields ---
+        # --- Step 3: Search common free-text fields (description/title) ---
         for field in (row.get("description"), row.get("title")):
-            # Convert field to string to handle potential non-string types
             w = _find(str(field))
             if w is not None:
                 return w
 
-        # Return None if no width was found in any source
+        # --- Step 4: Extract from "aa x bb m" patterns in description ---
+        desc = str(row.get("description", "")).lower()
+
+        # Patterns: "diện tích 4 x 15", "dt: 5.5 x 12m", "DT 6 x 17 m²"
+        size_match = re.search(r"(diện\s+tích|dt|DT)[:\s]*([\d.,]+)\s*x\s*([\d.,]+)", desc)
+        if size_match:
+            num1 = DataCleaner._parse_and_clean_number(size_match.group(2))
+            num2 = DataCleaner._parse_and_clean_number(size_match.group(3))
+            if num1 is not None and num2 is not None:
+                return min(num1, num2)
+
         return None
 
     @staticmethod
