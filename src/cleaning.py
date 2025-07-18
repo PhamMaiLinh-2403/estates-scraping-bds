@@ -672,19 +672,12 @@ class DataCleaner:
 
         # Focus only on patterns that closely associate width and alley context
         patterns = [
-            # e.g., "ngõ rộng 3m", "hẻm khoảng 2.5 mét", "kiệt 2,5m"
+            rf"\b{alley_kw}\b\s*{num_pat}\b",
+            rf"{num_pat}\b\s*\b{alley_kw}\b",
             rf"\b{alley_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
-
-            # e.g., "rộng 2.5m ngõ trước nhà", "2m ngõ nhỏ", "3,5 mét hẻm"
             rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{0, 20}\b{alley_kw}\b",
-
-            # e.g., "ngõ ô tô vào rộng 3m", "hẻm xe hơi gần 4m"
             rf"\b{alley_kw}\b[^.,;:\n\r]{0, 30}\b{vehicle_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
-
-            # e.g., "4m xe hơi vào hẻm"
             rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{0, 20}\b{vehicle_kw}\b[^.,;:\n\r]{0, 30}\b{alley_kw}\b",
-
-            # e.g., "tiếp giáp hẻm rộng 3m"
             rf"\btiếp giáp\b[^.,;:\n\r]{0, 20}\b{alley_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
         ]
 
