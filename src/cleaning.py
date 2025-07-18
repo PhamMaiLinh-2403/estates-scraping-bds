@@ -704,11 +704,10 @@ class DataCleaner:
 
         # === 2. Infer from vehicle clues
         vehicle_fallback = [
-            ("xe tải tránh", 10.0),
-            ("ô tô tránh", 5.0),
-            ("oto tránh", 5.0),
-            ("xe tải", 6.0),
-            ("ô tô vào tận nơi", 4.0),
+            ("ngõ xe tải tránh", 10.0),
+            ("ngõ xe tải", 8.0),
+            ("ngõ ô tô tránh", 5.0),
+            ("ngõ oto tránh", 5.0),
             ("ô tô đỗ cửa", 3.5),
             ("oto vào", 3.5),
             ("ô tô vào", 3.5),
@@ -716,8 +715,7 @@ class DataCleaner:
             ("hẻm ô tô", 4.0),
             ("hẻm xe hơi", 4.0),
             ("ngõ ô tô", 4.0),
-            ("ô tô đỗ", 4.0),
-            ("ba gác", 2.5),
+            ("ba gác tránh", 2.5),
             ("xe máy tránh", 2.5),
         ]
         for kw, width in vehicle_fallback:
