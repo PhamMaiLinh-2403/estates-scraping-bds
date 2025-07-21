@@ -3,6 +3,7 @@ import csv
 import os
 import random
 import time
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -122,7 +123,7 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     # Combine, filter, and ensure we have enough data
     df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-    df_train.dropna(subset=[target_col, 'Đơn giá đất'], inplace=True)
+    df_train.dropna(subset=['Đơn giá đất'], inplace=True)
     df_train = df_train[df_train[target_col] != 0]
 
     if len(df_train) < 50:
@@ -146,12 +147,20 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     # Impute missing values in features
     for col in numeric_features:
-        X_train[col].fillna(X_train[col].median(), inplace=True)
+        # FIX for FutureWarning: Avoid inplace on a copy
+        X_train[col] = X_train[col].fillna(X_train[col].median())
     for col in categorical_features:
         X_train[col] = X_train[col].astype(str).fillna('Missing')
 
     # One-hot encode categorical features
-    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, handle_unknown='ignore', dtype=float)
+    def sanitize_column_name(col: str) -> str:
+        """Removes special characters from column names for LightGBM compatibility."""
+        # LightGBM feature names can't contain special JSON characters: []{}",:
+        # We use regex to replace them, including other potentially problematic chars.
+        return re.sub(r'[\[\]{},:"\\/]', '_', col)
+
+    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, dtype=float)
+    X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
 
     # --- 3. Model Training ---
     print(f"  - Training model on {len(X_train_encoded)} records...")
@@ -169,11 +178,13 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     # Impute and encode prediction data consistently with training data
     for col in numeric_features:
-        X_predict[col].fillna(X_train[col].median(), inplace=True)
+        # FIX for FutureWarning: Avoid inplace on a copy
+        X_predict[col] = X_predict[col].fillna(X_train[col].median())
     for col in categorical_features:
         X_predict[col] = X_predict[col].astype(str).fillna('Missing')
 
-    X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, handle_unknown='ignore', dtype=float)
+    X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, dtype=float)
+    X_predict_encoded.columns = [sanitize_column_name(c) for c in X_predict_encoded.columns]
 
     # Align columns between training and prediction sets
     train_cols = X_train_encoded.columns
