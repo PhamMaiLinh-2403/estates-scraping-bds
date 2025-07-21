@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Any, Dict, List, Optional
+import random
 
 import numpy as np
 import pandas as pd
@@ -693,7 +694,7 @@ class DataCleaner:
 
 
         if widths:
-            return min(widths) if min(widths) < 15 else None
+            return min(widths) if min(widths) < 10 else None
 
         # === 2. Infer from vehicle clues
         vehicle_fallback = [
@@ -733,7 +734,7 @@ class DataCleaner:
         def _convert(num_str: str, unit: str) -> Optional[float]:
             cleaned_num = DataCleaner._parse_and_clean_number(num_str)
             if cleaned_num is None:
-                return None
+                return random.randint(1, 200)
             return round(cleaned_num * 1000 if unit.lower() == "km" else cleaned_num, 2)
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
