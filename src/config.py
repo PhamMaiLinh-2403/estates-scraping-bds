@@ -43,6 +43,7 @@ URLS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_urls.csv"
 DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details.csv"
 CLEANED_DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details_cleaned.csv"
 FEATURE_ENGINEERED_OUTPUT_FILE = f"{OUTPUT_DIR}/feature_engineered_listings.xlsx"
+ML_IMPUTED_OUTPUT_FILE = f"{OUTPUT_DIR}/ml_imputed_listings.xlsx"
 
 # Administrative data paths
 ADMIN_DATA_DIR = "Dữ liệu địa giới hành chính"

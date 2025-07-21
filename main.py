@@ -100,87 +100,99 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
     driver.quit()
     return results
 
-
-def predict_and_fill_alley_width(df: pd.DataFrame) -> pd.DataFrame:
+def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Uses a LightGBM model to predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values.
+    Internal helper to predict and fill 'Độ rộng ngõ/ngách nhỏ nhất (m)' using a LightGBM model.
     """
     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
-
-    def temp_calculate_land_unit_price(row):
-        total_price = row.get('Giá rao bán/giao dịch')
-        cost_per_sqm = row.get('Đơn giá xây dựng')
-        area = row.get('Diện tích đất (m2)')
-        floors = row.get('Số tầng công trình')
-        quality = row.get('Chất lượng còn lại')
-
-        if pd.isna(total_price) or pd.isna(cost_per_sqm) or pd.isna(area) or pd.isna(floors) or pd.isna(quality) or area <= 0 or floors <= 0:
-            return None
-
-        building_val = cost_per_sqm * (area * floors) * quality
-        if building_val >= total_price:
-            return None
-        return (total_price - building_val) / area
-
     df_copy = df.copy()
-    df_copy['Đơn giá đất'] = df_copy.apply(temp_calculate_land_unit_price, axis=1)
-    df_internal_train = df_copy[df_copy['Đơn giá đất'].notna()]
-    print(f"  - Using {len(df_internal_train)} internal records for ML training.")
 
+    # --- 1. Prepare Training Data ---
+    # Use records from the current pipeline that have valid target and key features
+    df_internal_train = df_copy[df_copy['Đơn giá đất'].notna() & df_copy[target_col].notna() & (df_copy[target_col] != 0)]
+    print(f"- Found {len(df_internal_train)} valid internal records for ML training.")
+
+    # Load external training data
     try:
-        df_external_train = pd.read_csv(config.TRAIN_FILE)
-        print(f"  - Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
+        df_external_train = pd.read_excel(config.TRAIN_FILE)
+        print(f"- Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
     except FileNotFoundError:
         df_external_train = pd.DataFrame()
-        print(f"  - External training data not found at '{config.TRAIN_FILE}'.")
+        print(f"- WARNING: External training data not found at '{config.TRAIN_FILE}'.")
 
+    # Combine, filter, and ensure we have enough data
     df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-    df_train = df_train[df_train[target_col].notna()]
+    df_train.dropna(subset=[target_col, 'Đơn giá đất'], inplace=True)
     df_train = df_train[df_train[target_col] != 0]
 
-    numeric_features = ['Giá rao bán/giao dịch', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Khoảng cách tới trục đường chính (m)', 'Số tầng công trình']
-    categorical_features = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã']
+    if len(df_train) < 50:
+        print("- Not enough training data (< 50 records). Skipping alley width prediction.")
+        return df
+
+    # --- 2. Feature Engineering & Preprocessing for ML ---
+    numeric_features = [
+        'Số tầng công trình', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
+        'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
+        'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất'
+    ]
+    categorical_features = [
+        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
+        'Đường phố', 'Hình dạng'
+    ]
     features = numeric_features + categorical_features
 
     X_train = df_train[features].copy()
     y_train = df_train[target_col].copy()
 
+    # Impute missing values in features
     for col in numeric_features:
         X_train[col].fillna(X_train[col].median(), inplace=True)
     for col in categorical_features:
-        X_train[col].fillna('Missing', inplace=True)
+        X_train[col] = X_train[col].astype(str).fillna('Missing')
 
-    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, handle_unknown='ignore')
+    # One-hot encode categorical features
+    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, handle_unknown='ignore', dtype=float)
 
+    # --- 3. Model Training ---
     print(f"  - Training model on {len(X_train_encoded)} records...")
     model = lgb.LGBMRegressor(random_state=42, verbosity=-1)
     model.fit(X_train_encoded, y_train)
 
+    # --- 4. Prediction ---
     predict_mask = df[target_col].isna()
     if not predict_mask.any():
-        print("  - No missing alley widths to predict.")
+        print("- No missing alley widths to predict.")
         return df
 
     df_to_predict = df[predict_mask]
     X_predict = df_to_predict[features].copy()
 
+    # Impute and encode prediction data consistently with training data
     for col in numeric_features:
         X_predict[col].fillna(X_train[col].median(), inplace=True)
     for col in categorical_features:
-        X_predict[col].fillna('Missing', inplace=True)
+        X_predict[col] = X_predict[col].astype(str).fillna('Missing')
 
-    X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, handle_unknown='ignore')
+    X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, handle_unknown='ignore', dtype=float)
+
+    # Align columns between training and prediction sets
     train_cols = X_train_encoded.columns
-    missing_in_predict = set(train_cols) - set(X_predict_encoded.columns)
+    predict_cols = X_predict_encoded.columns
+    missing_in_predict = set(train_cols) - set(predict_cols)
     for c in missing_in_predict:
         X_predict_encoded[c] = 0
+    extra_in_predict = set(predict_cols) - set(train_cols)
+    X_predict_encoded.drop(columns=list(extra_in_predict), inplace=True)
     X_predict_aligned = X_predict_encoded[train_cols]
 
-    print(f"- Predicting {len(X_predict_aligned)} missing alley width values...")
+    print(f"  - Predicting {len(X_predict_aligned)} missing alley width values...")
     predictions = model.predict(X_predict_aligned)
+
+    # Update the original DataFrame
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
-    print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
+    print(f"  - Successfully filled {len(predictions)} missing values for '{target_col}'.")
     return df
+
 
 # --- Pipeline Steps ---
 def run_scrape_urls():
@@ -355,10 +367,6 @@ def run_cleaning_pipeline():
     else:
         print("- All dimensions are valid.")
 
-    print("\nAttempting to predict and fill missing alley widths using ML model...")
-    df_cleaned = predict_and_fill_alley_width(df_cleaned)
-    print("ML prediction step complete.\n")
-
     final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
     df_final = df_cleaned.reindex(columns=final_columns)
 
@@ -400,16 +408,41 @@ def run_feature_engineering():
         f"Successfully engineered features and saved {len(df_final)} records to '{config.FEATURE_ENGINEERED_OUTPUT_FILE}'")
 
 
+def run_ml_imputation():
+    """Step 5: Use ML to impute missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values."""
+    if not os.path.exists(config.FEATURE_ENGINEERED_OUTPUT_FILE):
+        print(f"Feature engineered file not found: {config.FEATURE_ENGINEERED_OUTPUT_FILE}. Run with `--mode feature` first.")
+        return
+
+    print(f"Reading feature-engineered data from '{config.FEATURE_ENGINEERED_OUTPUT_FILE}'...")
+    df = pd.read_excel(config.FEATURE_ENGINEERED_OUTPUT_FILE)
+
+    print("Attempting to predict and fill missing alley widths using ML model...")
+    df_imputed = _predict_alley_width_ml_step(df)
+
+    # Re-calculate business advantage as it depends on alley width
+    print("Re-calculating 'Lợi thế kinh doanh' with imputed alley widths...")
+    df_imputed['Lợi thế kinh doanh'] = df_imputed.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
+
+    # Ensure the final column order is correct
+    df_final = df_imputed.reindex(columns=config.FINAL_COLUMNS)
+
+    df_final.to_excel(config.ML_IMPUTED_OUTPUT_FILE, index=False)
+    print(
+        f"Successfully imputed features and saved {len(df_final)} records to '{config.ML_IMPUTED_OUTPUT_FILE}'")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real‑estate scraper, cleaner & feature-engineering CLI")
     parser.add_argument(
         "--mode",
-        choices=["urls", "details", "clean", "feature"],
+        choices=["urls", "details", "clean", "feature", "ml"],
         required=True,
         help="'urls' → collect listing URLs\n"
              "'details' → scrape details from URLs\n"
              "'clean' → clean scraped data\n"
-             "'feature' → engineer new features from cleaned data"
+             "'feature' → engineer new features from cleaned data\n"
+             "'ml' → impute missing alley widths with an ML model"
     )
     args = parser.parse_args()
 
@@ -421,3 +454,5 @@ if __name__ == "__main__":
         run_cleaning_pipeline()
     elif args.mode == "feature":
         run_feature_engineering()
+    elif args.mode == "ml":
+        run_ml_imputation()
