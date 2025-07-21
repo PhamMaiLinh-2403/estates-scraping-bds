@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import Dict, Any, Optional
+from .cleaning import DataCleaner
 
 
 class FeatureEngineer:
@@ -81,7 +82,7 @@ class FeatureEngineer:
         Formula:
         Đơn giá đất = (Giá rao bán - Đơn giá nhà) / Diện tích đất
         where, Đơn giá nhà = Đơn giá xây dựng * Tổng diện tích sàn * Chất lượng còn lại
-        and, Tổng diện tích sàn is approximated as (Diện tích đất * Số tầng)
+        and, Tổng diện tích sàn is extracted from description or approximated as (Diện tích đất * Số tầng)
         """
         total_price = row.get('Giá rao bán/giao dịch')
         construction_cost_per_sqm = row.get('Đơn giá xây dựng')
@@ -98,8 +99,12 @@ class FeatureEngineer:
         if land_area <= 0 or num_floors <= 0:
             return None
 
-        # Approximate total floor area (Tổng diện tích sàn)
-        total_floor_area = land_area * num_floors
+        # Attempt to extract total floor area from description first
+        total_floor_area = DataCleaner.extract_built_area(row)
+
+        # If not found, fall back to the approximation
+        if total_floor_area is None:
+            total_floor_area = land_area * num_floors
 
         # Calculate total building value (Đơn giá nhà)
         building_value = construction_cost_per_sqm * total_floor_area * remaining_quality

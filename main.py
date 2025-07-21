@@ -296,7 +296,8 @@ def run_cleaning_pipeline():
             'Yếu tố khác': " | ".join(direct_features) if direct_features else None,
             'Tọa độ (vĩ độ)': row_dict.get('latitude'),
             'Tọa độ (kinh độ)': row_dict.get('longitude'),
-            'Hình ảnh của bài đăng': row_dict.get('image_urls')
+            'Hình ảnh của bài đăng': row_dict.get('image_urls'),
+            'description': row_dict.get('description')
         }
         cleaned_records.append(processed_data)
 
@@ -378,8 +379,10 @@ def run_cleaning_pipeline():
     else:
         print("- All dimensions are valid.")
 
-    final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
-    df_final = df_cleaned.reindex(columns=final_columns)
+    final_columns = [col for col in config.FINAL_COLUMNS if
+                     col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
+    columns_to_save = final_columns + ['description']  # Add description for saving
+    df_final = df_cleaned.reindex(columns=columns_to_save)
 
     df_final.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False, quoting=csv.QUOTE_ALL)
     print(f"Successfully cleaned and saved {len(df_final)} records to '{config.CLEANED_DETAILS_OUTPUT_FILE}'")

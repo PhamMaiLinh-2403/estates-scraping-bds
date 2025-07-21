@@ -826,3 +826,40 @@ class DataCleaner:
             else:
                 new_version.append(part)
         return new_version
+
+    def extract_built_area(row: Dict[str, Any]) -> Optional[float]:
+        """
+        Attempts to extract the total built area (tổng diện tích sàn) from the description.
+        This is more accurate than approximating from land area and floors.
+        """
+        description = row.get('description')
+        if not description or not isinstance(description, str):
+            return None
+
+        des = description.lower()
+
+        # Pattern 1: Look for "diện tích sàn" or "dt sàn" followed by a number.
+        first_pattern = re.search(
+            pattern=r"(?:diện\s+tích\s+|dt\s+)?sàn(?:\s+\S+){0,5}?\s*:?\s*(\d+[.,]?\d*)\s*(?:m2|m²|m)\b",
+            string=des
+        )
+        if first_pattern:
+            result_str = first_pattern.group(1).replace(',', '.')
+            try:
+                return float(result_str)
+            except ValueError:
+                pass  # Fall through if conversion fails
+
+        # Pattern 2: Look for "<area> m x <floors> T".
+        second_pattern = re.search(pattern=r'(\d+[.,]?\d*)\s*m\s*[*|x]\s*(\d+)\s*[T|t]', string=des)
+        if second_pattern:
+            area_str = second_pattern.group(1).replace(',', '.')
+            floor_str = second_pattern.group(2)
+            try:
+                area = float(area_str)
+                floor = float(floor_str)
+                return area * floor
+            except ValueError:
+                return None
+
+        return None
