@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
+import lightgbm as lgb
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
 from src.cleaning import DataCleaner, drop_mixed_listings
@@ -99,6 +100,87 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
     driver.quit()
     return results
 
+
+def predict_and_fill_alley_width(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Uses a LightGBM model to predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values.
+    """
+    target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
+
+    def temp_calculate_land_unit_price(row):
+        total_price = row.get('Giá rao bán/giao dịch')
+        cost_per_sqm = row.get('Đơn giá xây dựng')
+        area = row.get('Diện tích đất (m2)')
+        floors = row.get('Số tầng công trình')
+        quality = row.get('Chất lượng còn lại')
+
+        if pd.isna(total_price) or pd.isna(cost_per_sqm) or pd.isna(area) or pd.isna(floors) or pd.isna(quality) or area <= 0 or floors <= 0:
+            return None
+
+        building_val = cost_per_sqm * (area * floors) * quality
+        if building_val >= total_price:
+            return None
+        return (total_price - building_val) / area
+
+    df_copy = df.copy()
+    df_copy['Đơn giá đất'] = df_copy.apply(temp_calculate_land_unit_price, axis=1)
+    df_internal_train = df_copy[df_copy['Đơn giá đất'].notna()]
+    print(f"  - Using {len(df_internal_train)} internal records for ML training.")
+
+    try:
+        df_external_train = pd.read_csv(config.TRAIN_FILE)
+        print(f"  - Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
+    except FileNotFoundError:
+        df_external_train = pd.DataFrame()
+        print(f"  - External training data not found at '{config.TRAIN_FILE}'.")
+
+    df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
+    df_train = df_train[df_train[target_col].notna()]
+    df_train = df_train[df_train[target_col] != 0]
+
+    numeric_features = ['Giá rao bán/giao dịch', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Khoảng cách tới trục đường chính (m)', 'Số tầng công trình']
+    categorical_features = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã']
+    features = numeric_features + categorical_features
+
+    X_train = df_train[features].copy()
+    y_train = df_train[target_col].copy()
+
+    for col in numeric_features:
+        X_train[col].fillna(X_train[col].median(), inplace=True)
+    for col in categorical_features:
+        X_train[col].fillna('Missing', inplace=True)
+
+    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, handle_unknown='ignore')
+
+    print(f"  - Training model on {len(X_train_encoded)} records...")
+    model = lgb.LGBMRegressor(random_state=42, verbosity=-1)
+    model.fit(X_train_encoded, y_train)
+
+    predict_mask = df[target_col].isna()
+    if not predict_mask.any():
+        print("  - No missing alley widths to predict.")
+        return df
+
+    df_to_predict = df[predict_mask]
+    X_predict = df_to_predict[features].copy()
+
+    for col in numeric_features:
+        X_predict[col].fillna(X_train[col].median(), inplace=True)
+    for col in categorical_features:
+        X_predict[col].fillna('Missing', inplace=True)
+
+    X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, handle_unknown='ignore')
+    train_cols = X_train_encoded.columns
+    missing_in_predict = set(train_cols) - set(X_predict_encoded.columns)
+    for c in missing_in_predict:
+        X_predict_encoded[c] = 0
+    X_predict_aligned = X_predict_encoded[train_cols]
+
+    print(f"- Predicting {len(X_predict_aligned)} missing alley width values...")
+    predictions = model.predict(X_predict_aligned)
+    df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
+    print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
+    return df
 
 # --- Pipeline Steps ---
 def run_scrape_urls():
@@ -272,6 +354,10 @@ def run_cleaning_pipeline():
         print(f"- Dropped {dropped_count} rows where facade or length > total area.")
     else:
         print("- All dimensions are valid.")
+
+    print("\nAttempting to predict and fill missing alley widths using ML model...")
+    df_cleaned = predict_and_fill_alley_width(df_cleaned)
+    print("ML prediction step complete.\n")
 
     final_columns = [col for col in config.FINAL_COLUMNS if col not in ['Lợi thế kinh doanh', 'Đơn giá đất', 'Giá ước tính']]
     df_final = df_cleaned.reindex(columns=final_columns)

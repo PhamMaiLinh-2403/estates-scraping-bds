@@ -652,17 +652,20 @@ class DataCleaner:
     def extract_alley_width(row: Dict[str, Any]) -> Optional[float]:
         """
         Extract alley width from listing title and description.
-        Priority:
-            1. Return 0.0 if on main road ("mặt phố")
-            2. Extract explicit numeric width tied to alley
-            3. Infer from vehicle access
-            4. Use descriptive fallback
         """
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
 
         # === 0. Explicitly on the main road
         if is_on_main_road(text):
             return 0.0
+
+        try:
+            other_info_json = row.get("other_info", "{}") or "{}"
+            val = json.loads(other_info_json).get("Đường vào")
+            w = parse_and_clean_width(val)
+            return w if w and w < 10 else None
+        except (json.JSONDecodeError, TypeError):
+            pass
 
         alley_kw = r"(ngõ|hẻm|ngách|kiệt|đường\s+vào|lối\s+vào|trước\s+nhà|đường\s+trước\s+nhà)"
         vehicle_kw = r"(oto|ô\s*tô|xe\s+hơi|xe\s+tải|ba\s+gác|xe\s+máy)"

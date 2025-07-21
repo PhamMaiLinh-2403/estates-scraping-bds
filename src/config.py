@@ -50,6 +50,9 @@ PROVINCES_SQL_FILE = f"{ADMIN_DATA_DIR}/provinces_20250225_2.sql"
 DISTRICTS_SQL_FILE = f"{ADMIN_DATA_DIR}/districts_20250225_2.sql"
 STREETS_SQL_FILE = f"{ADMIN_DATA_DIR}/streets_20250225_2.sql"
 
+# ML Training data path
+ML_TRAIN_DATA_DIR = "data"
+TRAIN_FILE = f"{ML_TRAIN_DATA_DIR}/onehousing_train.xlsx"
 
 # Final columns of output
 FINAL_COLUMNS = [
