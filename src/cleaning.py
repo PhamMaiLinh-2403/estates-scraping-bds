@@ -866,19 +866,19 @@ class DataCleaner:
                 except ValueError:
                     pass  # Fall through
 
-        # --- Fallback method: Approximate from other columns ---
-        land_area = row.get('Diện tích đất (m2)')
-        num_floors = row.get('Số tầng công trình')
+        # # --- Fallback method: Approximate from other columns ---
+        # land_area = row.get('Diện tích đất (m2)')
+        # num_floors = row.get('Số tầng công trình')
 
-        # Ensure both values are available and valid before calculating
-        if pd.notna(land_area) and pd.notna(num_floors):
-            try:
-                # Check for valid numeric types and that floors > 0
-                if isinstance(land_area, (int, float)) and isinstance(num_floors, (int, float)) and num_floors > 0:
-                    return round(float(land_area * num_floors), 2)
-            except (ValueError, TypeError):
-                # This handles cases where values might be non-numeric strings
-                pass
+        # # Ensure both values are available and valid before calculating
+        # if pd.notna(land_area) and pd.notna(num_floors):
+        #     try:
+        #         # Check for valid numeric types and that floors > 0
+        #         if isinstance(land_area, (int, float)) and isinstance(num_floors, (int, float)) and num_floors > 0:
+        #             return round(float(land_area * num_floors), 2)
+        #     except (ValueError, TypeError):
+        #         # This handles cases where values might be non-numeric strings
+        #         pass
 
-        # If all methods fail, return None.
+        # # If all methods fail, return None.
         return None

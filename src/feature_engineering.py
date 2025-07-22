@@ -114,3 +114,12 @@ class FeatureEngineer:
         land_unit_price = land_value / land_area
 
         return round(land_unit_price, 2)
+    
+    @staticmethod
+    def fill_built_area(row: Dict[str, Any]) -> Optional[float]:
+        if pd.isna(row['Tổng diện tích sàn']):
+            if pd.isna(row['Diện tích đất (m2)']) == False and pd.isna(row['Số tầng công trình']) == False:
+                return row['Diện tích đất (m2)'] * row['Số tầng công trình']
+            return None
+        else:
+            return row['Tổng diện tích sàn']

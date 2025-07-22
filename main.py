@@ -413,10 +413,17 @@ def run_feature_engineering():
     print(f"Reading cleaned data from '{config.CLEANED_DETAILS_OUTPUT_FILE}'...")
     df = pd.read_csv(config.CLEANED_DETAILS_OUTPUT_FILE)
 
-    print("Engineering new features: 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất'...")
+    print("Engineering new features: 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Tổng diện tích sàn'...")
     df['Giá ước tính'] = df.apply(lambda row: FeatureEngineer.calculate_estimated_price(row.to_dict()), axis=1)
     df['Lợi thế kinh doanh'] = df.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
+    df['Tổng diện tích sàn'] = df.apply(lambda row: FeatureEngineer.fill_built_area(row.to_dict()), axis=1)
     df['Đơn giá đất'] = df.apply(lambda row: FeatureEngineer.calculate_land_unit_price(row.to_dict()), axis=1)
+
+    print(f'Giá rao bán/giao dịch NaN {df["Giá rao bán/giao dịch"].isna().sum()} values')
+    print(f'Đơn giá xây dựng NaN {df["Đơn giá xây dựng"].isna().sum()} values')
+    print(f'Diện tích đất (m2) NaN {df["Diện tích đất (m2)"].isna().sum()} values')
+    print(f'Chất lượng còn lại NaN {df["Chất lượng còn lại"].isna().sum()} values')
+    print(f'Đơn giá đất NaN {df["Đơn giá đất"].isna().sum()} values')
 
     initial_rows = len(df)
     df.dropna(subset=['Đơn giá đất'], inplace=True)
