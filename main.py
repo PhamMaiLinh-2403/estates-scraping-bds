@@ -419,12 +419,6 @@ def run_feature_engineering():
     df['Tổng diện tích sàn'] = df.apply(lambda row: FeatureEngineer.fill_built_area(row.to_dict()), axis=1)
     df['Đơn giá đất'] = df.apply(lambda row: FeatureEngineer.calculate_land_unit_price(row.to_dict()), axis=1)
 
-    print(f'Giá rao bán/giao dịch NaN {df["Giá rao bán/giao dịch"].isna().sum()} values')
-    print(f'Đơn giá xây dựng NaN {df["Đơn giá xây dựng"].isna().sum()} values')
-    print(f'Diện tích đất (m2) NaN {df["Diện tích đất (m2)"].isna().sum()} values')
-    print(f'Chất lượng còn lại NaN {df["Chất lượng còn lại"].isna().sum()} values')
-    print(f'Đơn giá đất NaN {df["Đơn giá đất"].isna().sum()} values')
-
     initial_rows = len(df)
     df.dropna(subset=['Đơn giá đất'], inplace=True)
     df.reset_index(drop=True, inplace=True)
