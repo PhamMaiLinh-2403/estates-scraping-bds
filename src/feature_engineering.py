@@ -82,29 +82,26 @@ class FeatureEngineer:
         Formula:
         Đơn giá đất = (Giá rao bán - Đơn giá nhà) / Diện tích đất
         where, Đơn giá nhà = Đơn giá xây dựng * Tổng diện tích sàn * Chất lượng còn lại
-        and, Tổng diện tích sàn is extracted from description or approximated as (Diện tích đất * Số tầng)
+        and, Tổng diện tích sàn is pre-calculated in the cleaning step.
         """
         total_price = row.get('Giá rao bán/giao dịch')
         construction_cost_per_sqm = row.get('Đơn giá xây dựng')
         land_area = row.get('Diện tích đất (m2)')
-        num_floors = row.get('Số tầng công trình')
         remaining_quality = row.get('Chất lượng còn lại')
+        total_floor_area = row.get('Tổng diện tích sàn')
 
-        # Check for missing essential values
+        # Check for missing essential values, including the pre-calculated total_floor_area
         if pd.isna(total_price) or pd.isna(construction_cost_per_sqm) or \
-                pd.isna(land_area) or pd.isna(num_floors) or pd.isna(remaining_quality):
+                pd.isna(land_area) or pd.isna(remaining_quality) or \
+                pd.isna(total_floor_area):
             return None
 
         # Handle edge cases to prevent errors
-        if land_area <= 0 or num_floors <= 0:
+        if land_area <= 0 or total_floor_area <= 0:
             return None
 
-        # Attempt to extract total floor area from description first
-        total_floor_area = DataCleaner.extract_built_area(row)
-
-        # If not found, fall back to the approximation
-        if total_floor_area is None:
-            total_floor_area = land_area * num_floors
+        # The approximation logic is now handled in `extract_built_area`,
+        # so we directly use the `Tổng diện tích sàn` value.
 
         # Calculate total building value (Đơn giá nhà)
         building_value = construction_cost_per_sqm * total_floor_area * remaining_quality

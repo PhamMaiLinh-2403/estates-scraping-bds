@@ -734,10 +734,15 @@ class DataCleaner:
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
+        """
+        Extracts the distance to a main road from text.
+        If no specific distance is found, returns a random float between 10.0 and 200.0.
+        """
+
         def _convert(num_str: str, unit: str) -> Optional[float]:
             cleaned_num = DataCleaner._parse_and_clean_number(num_str)
             if cleaned_num is None:
-                return random.randint(1, 200)
+                return None
             return round(cleaned_num * 1000 if unit.lower() == "km" else cleaned_num, 2)
 
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
@@ -774,10 +779,10 @@ class DataCleaner:
         dists = []
 
         for match in matches:
-            match_text = " ".join(match)
+            match_text = " ".join(str(m) for m in match)
             if re.search(place_of_interest, match_text):  # Skip places like BigC, Vincom...
                 continue
-            num, unit = match[1], match[2] or "m"
+            num, unit = match[-2], match[-1] or "m"
             converted = _convert(num, unit)
             if converted is not None and 0 < converted < 1000:
                 dists.append(converted)
@@ -793,7 +798,7 @@ class DataCleaner:
         if re.search(r"(trong\s+ngõ|trong\s+hẻm)", text):
             return 25.0
 
-        return None
+        return float(random.randint(10, 200))
 
     @staticmethod
     def extract_direct_features(row: Dict[str, Any]) -> List[str]:
@@ -830,36 +835,50 @@ class DataCleaner:
     def extract_built_area(row: Dict[str, Any]) -> Optional[float]:
         """
         Attempts to extract the total built area (tổng diện tích sàn) from the description.
-        This is more accurate than approximating from land area and floors.
+        If not found, it falls back to approximating from land area and floors.
         """
+        # --- Primary method: Extract from text ---
         description = row.get('description')
-        if not description or not isinstance(description, str):
-            return None
+        if isinstance(description, str):
+            des = description.lower()
 
-        des = description.lower()
+            # Pattern 1: Look for "diện tích sàn" or "dt sàn" followed by a number.
+            first_pattern = re.search(
+                pattern=r"(?:diện\s+tích\s+|dt\s+)?sàn(?:\s+\S+){0,5}?\s*:?\s*(\d+[.,]?\d*)\s*(?:m2|m²|m)\b",
+                string=des
+            )
+            if first_pattern:
+                result_str = first_pattern.group(1).replace(',', '.')
+                try:
+                    return float(result_str)
+                except ValueError:
+                    pass  # Fall through if conversion fails
 
-        # Pattern 1: Look for "diện tích sàn" or "dt sàn" followed by a number.
-        first_pattern = re.search(
-            pattern=r"(?:diện\s+tích\s+|dt\s+)?sàn(?:\s+\S+){0,5}?\s*:?\s*(\d+[.,]?\d*)\s*(?:m2|m²|m)\b",
-            string=des
-        )
-        if first_pattern:
-            result_str = first_pattern.group(1).replace(',', '.')
+            # Pattern 2: Look for "<area> m x <floors> T".
+            second_pattern = re.search(pattern=r'(\d+[.,]?\d*)\s*m\s*[*|x]\s*(\d+)\s*[T|t]', string=des)
+            if second_pattern:
+                area_str = second_pattern.group(1).replace(',', '.')
+                floor_str = second_pattern.group(2)
+                try:
+                    area = float(area_str)
+                    floor = float(floor_str)
+                    return area * floor
+                except ValueError:
+                    pass  # Fall through
+
+        # --- Fallback method: Approximate from other columns ---
+        land_area = row.get('Diện tích đất (m2)')
+        num_floors = row.get('Số tầng công trình')
+
+        # Ensure both values are available and valid before calculating
+        if pd.notna(land_area) and pd.notna(num_floors):
             try:
-                return float(result_str)
-            except ValueError:
-                pass  # Fall through if conversion fails
+                # Check for valid numeric types and that floors > 0
+                if isinstance(land_area, (int, float)) and isinstance(num_floors, (int, float)) and num_floors > 0:
+                    return round(float(land_area * num_floors), 2)
+            except (ValueError, TypeError):
+                # This handles cases where values might be non-numeric strings
+                pass
 
-        # Pattern 2: Look for "<area> m x <floors> T".
-        second_pattern = re.search(pattern=r'(\d+[.,]?\d*)\s*m\s*[*|x]\s*(\d+)\s*[T|t]', string=des)
-        if second_pattern:
-            area_str = second_pattern.group(1).replace(',', '.')
-            floor_str = second_pattern.group(2)
-            try:
-                area = float(area_str)
-                floor = float(floor_str)
-                return area * floor
-            except ValueError:
-                return None
-
+        # If all methods fail, return None.
         return None

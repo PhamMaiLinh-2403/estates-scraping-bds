@@ -297,6 +297,7 @@ def run_cleaning_pipeline():
             'Giá rao bán/giao dịch': DataCleaner.extract_total_price(row_dict.get('main_info')),
             'Loại đơn giá (đ/m2 hoặc đ/m ngang)': 'đ/m2',
             'Số tầng công trình': DataCleaner.extract_num_floors(row_dict),
+            'Tổng diện tích sàn': DataCleaner.extract_built_area(row_dict),
             'Đơn giá xây dựng': DataCleaner.get_construction_cost(row_dict),
             'Năm xây dựng': None,
             'Chất lượng còn lại': DataCleaner.estimate_remaining_quality(row_dict),

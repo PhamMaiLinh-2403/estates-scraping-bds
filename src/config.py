@@ -72,6 +72,7 @@ FINAL_COLUMNS = [
     'Đơn giá đất',
     'Lợi thế kinh doanh',
     'Số tầng công trình',
+    'Tổng diện tích sàn',
     'Đơn giá xây dựng',
     'Năm xây dựng',
     'Chất lượng còn lại',
