@@ -7,7 +7,9 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
-import lightgbm as lgb
+import numpy as np
+from sklearn.svm import SVR
+from sklearn.preprocessing import StandardScaler
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
 from src.cleaning import DataCleaner, drop_mixed_listings
@@ -103,17 +105,16 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
 
 def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Internal helper to predict and fill 'Độ rộng ngõ/ngách nhỏ nhất (m)' using a LightGBM model.
+    Internal helper to predict and fill 'Độ rộng ngõ/ngách nhỏ nhất (m)' using a Support Vector Regressor (SVR) model.
+    This version uses a log-transform on the target and scales the features.
     """
     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
     df_copy = df.copy()
 
     # --- 1. Prepare Training Data ---
-    # Use records from the current pipeline that have valid target and key features
     df_internal_train = df_copy[df_copy['Đơn giá đất'].notna() & df_copy[target_col].notna() & (df_copy[target_col] != 0)]
     print(f"- Found {len(df_internal_train)} valid internal records for ML training.")
 
-    # Load external training data
     try:
         df_external_train = pd.read_excel(config.TRAIN_FILE)
         print(f"- Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
@@ -121,10 +122,17 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
         df_external_train = pd.DataFrame()
         print(f"- WARNING: External training data not found at '{config.TRAIN_FILE}'.")
 
-    # Combine, filter, and ensure we have enough data
     df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-    df_train.dropna(subset=['Đơn giá đất'], inplace=True)
-    df_train = df_train[df_train[target_col] != 0]
+
+    # --- FIX: Apply cleaning steps AFTER concatenation to ensure both internal and external data are clean ---
+    # 1. Drop rows where essential columns for training (unit price, target) are missing.
+    initial_train_count = len(df_train)
+    df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
+
+    # 2. Filter out rows where the target is 0, as this is invalid data for this prediction.
+    df_train = df_train[df_train[target_col] != 0].copy()
+
+    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows with missing values).")
 
     if len(df_train) < 50:
         print("- Not enough training data (< 50 records). Skipping alley width prediction.")
@@ -145,27 +153,29 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     X_train = df_train[features].copy()
     y_train = df_train[target_col].copy()
 
-    # Impute missing values in features
+    # LOG TRANSFORM THE TARGET VARIABLE
+    y_train_log = np.log1p(y_train)
+
     for col in numeric_features:
-        # FIX for FutureWarning: Avoid inplace on a copy
         X_train[col] = X_train[col].fillna(X_train[col].median())
     for col in categorical_features:
         X_train[col] = X_train[col].astype(str).fillna('Missing')
 
-    # One-hot encode categorical features
     def sanitize_column_name(col: str) -> str:
-        """Removes special characters from column names for LightGBM compatibility."""
-        # LightGBM feature names can't contain special JSON characters: []{}",:
-        # We use regex to replace them, including other potentially problematic chars.
         return re.sub(r'[\[\]{},:"\\/]', '_', col)
 
     X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, dtype=float)
     X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
 
+    # SCALE FEATURES (CRITICAL FOR SVR)
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train_encoded)
+
     # --- 3. Model Training ---
-    print(f"  - Training model on {len(X_train_encoded)} records...")
-    model = lgb.LGBMRegressor(random_state=42, verbosity=-1)
-    model.fit(X_train_encoded, y_train)
+    print(f"  - Training SVR model on {len(X_train_scaled)} records...")
+    # Using SVR model instead of LightGBM
+    model = SVR()
+    model.fit(X_train_scaled, y_train_log)
 
     # --- 4. Prediction ---
     predict_mask = df[target_col].isna()
@@ -176,9 +186,7 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     df_to_predict = df[predict_mask]
     X_predict = df_to_predict[features].copy()
 
-    # Impute and encode prediction data consistently with training data
     for col in numeric_features:
-        # FIX for FutureWarning: Avoid inplace on a copy
         X_predict[col] = X_predict[col].fillna(X_train[col].median())
     for col in categorical_features:
         X_predict[col] = X_predict[col].astype(str).fillna('Missing')
@@ -186,7 +194,6 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, dtype=float)
     X_predict_encoded.columns = [sanitize_column_name(c) for c in X_predict_encoded.columns]
 
-    # Align columns between training and prediction sets
     train_cols = X_train_encoded.columns
     predict_cols = X_predict_encoded.columns
     missing_in_predict = set(train_cols) - set(predict_cols)
@@ -196,8 +203,16 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     X_predict_encoded.drop(columns=list(extra_in_predict), inplace=True)
     X_predict_aligned = X_predict_encoded[train_cols]
 
-    print(f"  - Predicting {len(X_predict_aligned)} missing alley width values...")
-    predictions = model.predict(X_predict_aligned)
+    # SCALE PREDICTION DATA USING THE SAME SCALER
+    X_predict_scaled = scaler.transform(X_predict_aligned)
+
+    print(f"  - Predicting {len(X_predict_scaled)} missing alley width values...")
+    log_predictions = model.predict(X_predict_scaled)
+
+    # INVERSE TRANSFORM PREDICTIONS
+    predictions = np.expm1(log_predictions)
+    # Ensure predictions are not negative
+    predictions[predictions < 0] = 0
 
     # Update the original DataFrame
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]

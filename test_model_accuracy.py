@@ -5,6 +5,9 @@ import numpy as np
 import lightgbm as lgb
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.svm import SVR
 import matplotlib.pyplot as plt
 import optuna
 
@@ -17,8 +20,7 @@ from src import config
 
 def objective(trial, X, y):
     """
-    The objective function for Optuna to optimize.
-    It trains a model with a given set of hyperparameters and evaluates it using cross-validation.
+    The objective function for Optuna to optimize for the LightGBM model.
     """
     # --- 1. Define Hyperparameter Search Space ---
     params = {
@@ -39,15 +41,9 @@ def objective(trial, X, y):
     }
 
     # --- 2. Cross-Validation Setup ---
-    # StratifiedKFold is better for imbalanced datasets. For regression, we can
-    # bin the target variable to create "strata" to ensure each fold has a
-    # similar distribution of target values.
     N_SPLITS = 5
-    # Create bins for stratification. Using 10 bins is a reasonable starting point.
-    # `duplicates='drop'` handles cases where bin edges are not unique.
     y_binned = pd.cut(y, bins=10, labels=False, duplicates='drop')
 
-    # If binning results in fewer than N_SPLITS unique bins, fallback to using original y
     if y_binned.nunique() < N_SPLITS:
         y_stratify = y
     else:
@@ -56,7 +52,6 @@ def objective(trial, X, y):
     cv = StratifiedKFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
 
     scores = []
-    # Use the binned y for splitting, but the original y for training/evaluation
     for train_idx, val_idx in cv.split(X, y_stratify):
         X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
         y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
@@ -68,18 +63,19 @@ def objective(trial, X, y):
         rmse = np.sqrt(mean_squared_error(y_val_fold, preds))
         scores.append(rmse)
 
-    # Optuna aims to minimize this returned value
     return np.mean(scores)
 
 
 def test_alley_width_model_accuracy():
     """
-    Trains and evaluates the alley width prediction model using Optuna for hyperparameter
-    tuning and a final train-test split for validation.
+    Trains and compares multiple models for alley width prediction.
+    - LightGBM: with Optuna for hyperparameter tuning.
+    - Linear Regression: as a simple baseline.
+    - Support Vector Regressor (SVR): as another powerful baseline.
     """
-    print("--- Starting Model Accuracy Test with Hyperparameter Tuning ---")
+    print("--- Starting Model Accuracy Test and Comparison ---")
 
-    # --- 1. Load Data (Same as before) ---
+    # --- 1. Load Data ---
     if not os.path.exists(config.FEATURE_ENGINEERED_OUTPUT_FILE):
         print(f"ERROR: Feature engineered file not found at '{config.FEATURE_ENGINEERED_OUTPUT_FILE}'.")
         print("Please run the 'feature' pipeline step first (`--mode feature`).")
@@ -102,7 +98,7 @@ def test_alley_width_model_accuracy():
         return
     print(f"Found {len(df_testable)} records with valid target values for testing.")
 
-    # --- 2. Feature Preparation (Same as before) ---
+    # --- 2. Feature Preparation ---
     numeric_features = [
         'Số tầng công trình', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
         'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
@@ -122,11 +118,12 @@ def test_alley_width_model_accuracy():
     for col in categorical_features:
         X[col] = X[col].astype(str).fillna('Missing')
 
-    # --- 3. Train-Test Split (Same as before) ---
+    # --- 3. Train-Test Split ---
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     print(f"Data split into {len(X_train)} training records and {len(X_test)} testing records.")
 
-    # --- 4. Preprocessing (Same as before) ---
+    # --- 4. Preprocessing ---
+    # One-Hot Encode categorical features
     def sanitize_column_name(col: str) -> str:
         return re.sub(r'[\[\]{},:"\\/]', '_', col)
 
@@ -136,6 +133,7 @@ def test_alley_width_model_accuracy():
     X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
     X_test_encoded.columns = [sanitize_column_name(c) for c in X_test_encoded.columns]
 
+    # Align columns
     train_cols = X_train_encoded.columns
     test_cols = X_test_encoded.columns
     missing_in_test = set(train_cols) - set(test_cols)
@@ -145,54 +143,98 @@ def test_alley_width_model_accuracy():
     X_test_encoded = X_test_encoded.drop(columns=list(extra_in_test))
     X_test_aligned = X_test_encoded[train_cols]
 
-    # --- 5. Hyperparameter Tuning with Optuna & CV ---
-    print("\n--- Starting Hyperparameter Tuning with Optuna (using Cross-Validation) ---")
+    # Scale features for Linear Regression and SVR (they are sensitive to feature scales)
+    # Tree-based models like LightGBM do not require scaling.
+    print("\nScaling features for Linear Regression and SVR...")
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train_encoded)
+    X_test_scaled = scaler.transform(X_test_aligned)
+
+    # --- 5. Hyperparameter Tuning for LightGBM ---
+    print("\n--- Starting Hyperparameter Tuning for LightGBM with Optuna (using CV) ---")
     study = optuna.create_study(direction='minimize')
-    # We pass the training data to the objective function using a lambda
     study.optimize(lambda trial: objective(trial, X_train_encoded, y_train), n_trials=100)
 
     print("\n--- Tuning Complete ---")
-    print(f"Best CV RMSE: {study.best_value:.4f}")
+    print(f"Best CV RMSE for LightGBM: {study.best_value:.4f}")
     print("Best parameters found:")
     for key, value in study.best_params.items():
         print(f"  - {key}: {value}")
 
-    # --- 6. Train Final Model with Best Parameters ---
-    print("\nTraining the final model on the full training set with best parameters...")
-    best_params = study.best_params
-    final_model = lgb.LGBMRegressor(**best_params, random_state=42, verbosity=-1)
-    final_model.fit(X_train_encoded, y_train)
-    print("Final model training complete.")
+    # --- 6. Train and Evaluate All Models on the Test Set ---
+    # Define models
+    lgbm_tuned = lgb.LGBMRegressor(**study.best_params, random_state=42, verbosity=-1)
+    linear_reg = LinearRegression()
+    svr = SVR() # Using default parameters for SVR as a baseline
 
-    # --- 7. Prediction & Evaluation on the Held-Out Test Set ---
-    print("\nMaking predictions on the unseen test set...")
-    predictions = final_model.predict(X_test_aligned)
+    models = {
+        "Tuned LightGBM": lgbm_tuned,
+        "Linear Regression": linear_reg,
+        "SVR": svr
+    }
 
-    r2 = r2_score(y_test, predictions)
-    mae = mean_absolute_error(y_test, predictions)
-    rmse = np.sqrt(mean_squared_error(y_test, predictions))
+    results = {}
+    best_model_predictions = None
 
-    print("\n--- Final Tuned Model Performance Metrics (on Test Set) ---")
-    print(f"R-squared (R²): {r2:.4f}")
-    print(f"  - Interpretation: The model explains {r2:.1%} of the variance in the alley width.")
-    print(f"Mean Absolute Error (MAE): {mae:.4f} meters")
-    print(f"  - Interpretation: On average, the model's prediction is off by {mae:.2f} meters.")
-    print(f"Root Mean Squared Error (RMSE): {rmse:.4f} meters")
-    print(f"  - Interpretation: A measure similar to MAE, but penalizes larger errors more heavily.")
+    for name, model in models.items():
+        print(f"\n--- Training and Evaluating: {name} ---")
 
-    # --- 8. Show a Sample of Predictions ---
-    print("\n--- Sample Predictions vs. Actual Values ---")
-    results_df = pd.DataFrame({
+        # Use scaled data for LR and SVR, and original encoded data for LightGBM
+        if name in ["Linear Regression", "SVR"]:
+            X_train_fit = X_train_scaled
+            X_test_predict = X_test_scaled
+        else:
+            X_train_fit = X_train_encoded
+            X_test_predict = X_test_aligned
+
+        # Train model
+        model.fit(X_train_fit, y_train)
+
+        # Make predictions
+        predictions = model.predict(X_test_predict)
+
+        # Evaluate
+        r2 = r2_score(y_test, predictions)
+        mae = mean_absolute_error(y_test, predictions)
+        rmse = np.sqrt(mean_squared_error(y_test, predictions))
+
+        results[name] = {
+            "R-squared": r2,
+            "MAE (meters)": mae,
+            "RMSE (meters)": rmse
+        }
+        print(f"Metrics for {name}: R²={r2:.4f}, MAE={mae:.4f}, RMSE={rmse:.4f}")
+
+        # Save predictions of the tuned LGBM model for visualization
+        if name == "Tuned LightGBM":
+            best_model_predictions = predictions
+
+    # --- 7. Compare Model Performance ---
+    print("\n--- Final Model Performance Comparison (on Test Set) ---")
+    results_df = pd.DataFrame(results).T
+    # Sort by RMSE (lower is better)
+    results_df = results_df.sort_values(by="RMSE (meters)", ascending=True)
+    print(results_df.to_string(formatters={
+        'R-squared': '{:.4f}'.format,
+        'MAE (meters)': '{:.4f}'.format,
+        'RMSE (meters)': '{:.4f}'.format
+    }))
+    best_model_name = results_df.index[0]
+    print(f"\nBest performing model based on RMSE: {best_model_name}")
+
+    # --- 8. Show a Sample of Predictions from the Best Model ---
+    print(f"\n--- Sample Predictions vs. Actual Values (from {best_model_name}) ---")
+    sample_results_df = pd.DataFrame({
         'Actual Width (m)': y_test,
-        'Predicted Width (m)': predictions.round(2)
+        'Predicted Width (m)': best_model_predictions.round(2)
     })
-    print(results_df.head(10).to_string())
+    print(sample_results_df.head(10).to_string())
 
-    # --- 9. Visualization ---
+    # --- 9. Visualization for the Best Model ---
     plt.figure(figsize=(10, 8))
-    plt.scatter(y_test, predictions, alpha=0.5, label='Predicted vs. Actual')
+    plt.scatter(y_test, best_model_predictions, alpha=0.5, label='Predicted vs. Actual')
     plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2, label='Perfect Prediction Line')
-    plt.title('Tuned Model Performance: Actual vs. Predicted on Test Set')
+    plt.title(f'{best_model_name} Performance: Actual vs. Predicted on Test Set')
     plt.xlabel('Actual Alley Width (m)')
     plt.ylabel('Predicted Alley Width (m)')
     plt.legend()
