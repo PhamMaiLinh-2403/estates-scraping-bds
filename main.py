@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score as r2, root_mean_squared_error as rmse, mean_absolute_error as mae
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
@@ -108,13 +108,12 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
 
 def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Internal helper to predict and fill 'Độ rộng ngõ/ngách nhỏ nhất (m)' using a Support Vector Regressor (SVR) model.
-    This version uses a log-transform on the target and scales the features.
+    Predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values using a Support Vector Regressor (SVR).
+    Applies log transform on the target before train-test split and evaluates accuracy.
     """
     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
     df_copy = df.copy()
 
-    # --- 1. Prepare Training Data ---
     df_internal_train = df_copy[df_copy['Đơn giá đất'].notna() & df_copy[target_col].notna() & (df_copy[target_col] != 0)]
     print(f"- Found {len(df_internal_train)} valid internal records for ML training.")
 
@@ -126,22 +125,16 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
         print(f"- WARNING: External training data not found at '{config.TRAIN_FILE}'.")
 
     df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-
-    # --- FIX: Apply cleaning steps AFTER concatenation to ensure both internal and external data are clean ---
-    # 1. Drop rows where essential columns for training (unit price, target) are missing.
     initial_train_count = len(df_train)
     df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
-
-    # 2. Filter out rows where the target is 0, as this is invalid data for this prediction.
     df_train = df_train[df_train[target_col] != 0].copy()
 
-    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows with missing values).")
+    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows).")
 
     if len(df_train) < 50:
         print("- Not enough training data (< 50 records). Skipping alley width prediction.")
         return df
 
-    # --- 2. Feature Engineering & Preprocessing for ML ---
     numeric_features = [
         'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
         'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
@@ -152,72 +145,58 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
         'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
         'Đường phố','Lợi thế kinh doanh', 'Hình dạng'
     ]
-    features = numeric_features + categorical_features
-
-    # X_train = df_train[features].copy()
-    # y_train = df_train[target_col].copy()
-
-    # for col in numeric_features:
-    #     X_train[col] = X_train[col].fillna(X_train[col].median())
-    # for col in categorical_features:
-    #     X_train[col] = X_train[col].astype(str).fillna('Missing')
-    #     print(f'NaN rows: {(df[df['Xã/Phường/Thị trấn'].isna() | df['Đường phố'].isna() |df['Lợi thế kinh doanh'].isna() | df['Hình dạng'].isna()]).shape}')
-
-    # # LOG TRANSFORM THE TARGET VARIABLE
-    # y_train_log = np.log1p(y_train)
-
-    # def sanitize_column_name(col: str) -> str:
-    #     return re.sub(r'[\[\]{},:"\\/]', '_', col)
-
-    # X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, dtype=float)
-    # X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
-
     cat_get_dummies = [
-        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 
+        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã',
         'Xã/Phường/Thị trấn', 'Đường phố', 'Hình dạng'
     ]
-
-    # features = numeric_features + categorical_features
+    features = numeric_features + categorical_features
 
     X = df_train[features].copy()
-    y = df_train[target_col].copy()
+    y = np.log1p(df_train[target_col])
 
     for col in numeric_features:
         X[col] = X[col].fillna(X[col].median())
     for col in categorical_features:
         X[col] = X[col].astype(str).fillna('Missing')
 
-    def sanitize_column_name(col: str) -> str:
-        return re.sub(r'[\[\]{},:"\\/]', '_', col)
-
-    # --- 3. Train-Test Split ---
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     print(f"Data split into {len(X_train)} training records and {len(X_test)} testing records.")
 
-     # LOG TRANSFORM THE TARGET VARIABLE
-    y_train_log = np.log1p(y_train)
-
-    # --- 4. Preprocessing ---
-    # One-Hot Encode categorical features
     def sanitize_column_name(col: str) -> str:
         return re.sub(r'[\[\]{},:"\\/]', '_', col)
 
+    # Encode train
     X_train_encoded = pd.get_dummies(X_train, columns=cat_get_dummies, dtype=float)
     X_train_encoded['Lợi thế kinh doanh'] = X_train['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
-    # X_test_encoded = pd.get_dummies(X_test, columns=cat_get_dummies, dtype=float)
-    # X_test_encoded['Lợi thế kinh doanh'] = X_test['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
+    X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
 
-    # SCALE FEATURES (CRITICAL FOR SVR)
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train_encoded)
 
-    # --- 3. Model Training ---
-    print(f"  - Training SVR model on {len(X_train_scaled)} records...")
-    # Using SVR model instead of LightGBM
+    # Train model
     model = SVR()
-    model.fit(X_train_scaled, y_train_log)
+    model.fit(X_train_scaled, y_train)
 
-    # --- 4. Prediction ---
+    # Encode and scale test
+    X_test_encoded = pd.get_dummies(X_test, columns=cat_get_dummies, dtype=float)
+    X_test_encoded['Lợi thế kinh doanh'] = X_test['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
+    X_test_encoded.columns = [sanitize_column_name(c) for c in X_test_encoded.columns]
+
+    # Align test columns
+    for col in set(X_train_encoded.columns) - set(X_test_encoded.columns):
+        X_test_encoded[col] = 0
+    X_test_encoded = X_test_encoded[X_train_encoded.columns]
+    X_test_scaled = scaler.transform(X_test_encoded)
+
+    # Evaluate
+    log_preds = model.predict(X_test_scaled)
+    preds = np.expm1(log_preds)
+    y_test_true = np.expm1(y_test)
+    print(f'- Mean absolute error: {mean_absolute_error(y_test_true, preds):.3f}')
+    print(f"- RMSE: {mean_squared_error(y_test_true, preds, squared=False):.3f}")
+    print(f'- R2 score: {r2_score(y_test_true, preds):.3f}')
+
+    # Predict missing
     predict_mask = df[target_col].isna()
     if not predict_mask.any():
         print("- No missing alley widths to predict.")
@@ -225,42 +204,31 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     df_to_predict = df[predict_mask]
     X_predict = df_to_predict[features].copy()
-
     for col in numeric_features:
-        X_predict[col] = X_predict[col].fillna(X_train[col].median())
+        X_predict[col] = X_predict[col].fillna(X[col].median())
     for col in categorical_features:
         X_predict[col] = X_predict[col].astype(str).fillna('Missing')
 
     X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, dtype=float)
+    X_predict_encoded['Lợi thế kinh doanh'] = X_predict['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
     X_predict_encoded.columns = [sanitize_column_name(c) for c in X_predict_encoded.columns]
 
-    train_cols = X_train_encoded.columns
-    predict_cols = X_predict_encoded.columns
-    missing_in_predict = set(train_cols) - set(predict_cols)
-    for c in missing_in_predict:
-        X_predict_encoded[c] = 0
-    extra_in_predict = set(predict_cols) - set(train_cols)
-    X_predict_encoded.drop(columns=list(extra_in_predict), inplace=True)
-    X_predict_aligned = X_predict_encoded[train_cols]
+    for col in set(X_train_encoded.columns) - set(X_predict_encoded.columns):
+        X_predict_encoded[col] = 0
+    for col in set(X_predict_encoded.columns) - set(X_train_encoded.columns):
+        X_predict_encoded.drop(columns=col, inplace=True)
 
-    # SCALE PREDICTION DATA USING THE SAME SCALER
-    X_predict_scaled = scaler.transform(X_predict_aligned)
+    X_predict_encoded = X_predict_encoded[X_train_encoded.columns]
+    X_predict_scaled = scaler.transform(X_predict_encoded)
 
-    print(f"  - Predicting {len(X_predict_scaled)} missing alley width values...")
     log_predictions = model.predict(X_predict_scaled)
-
-    # INVERSE TRANSFORM PREDICTIONS
     predictions = np.expm1(log_predictions)
-    # Ensure predictions are not negative
     predictions[predictions < 0] = 0
 
-    # Update the original DataFrame
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
-    print(f"  - Successfully filled {len(predictions)} missing values for '{target_col}'.")
-    print(f'  - Mean absolute error: {mae(y_test, predictions)}')
-    print(f'  - Root mean squared error: {rmse(y_test, predictions)}')
-    print(f'  - R2 score: {r2(y_test, predictions)}')
+    print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
     return df
+
 
 # --- Pipeline Steps ---
 def run_scrape_urls():
