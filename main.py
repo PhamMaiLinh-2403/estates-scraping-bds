@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score as r2, root_mean_squared_error as rmse, mean_absolute_error as mae
 from sklearn.preprocessing import StandardScaler
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
@@ -199,7 +200,6 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     # --- 4. Preprocessing ---
     # One-Hot Encode categorical features
     def sanitize_column_name(col: str) -> str:
-        
         return re.sub(r'[\[\]{},:"\\/]', '_', col)
 
     X_train_encoded = pd.get_dummies(X_train, columns=cat_get_dummies, dtype=float)
@@ -257,8 +257,10 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     # Update the original DataFrame
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
     print(f"  - Successfully filled {len(predictions)} missing values for '{target_col}'.")
+    print(f'  - Mean absolute error: {mae(y_test, predictions)}')
+    print(f'  - Root mean squared error: {rmse(y_test, predictions)}')
+    print(f'  - R2 score: {r2(y_test, predictions)}')
     return df
-
 
 # --- Pipeline Steps ---
 def run_scrape_urls():
