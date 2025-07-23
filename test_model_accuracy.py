@@ -89,6 +89,15 @@ def test_alley_width_model_accuracy():
         print(f"WARNING: External training data not found at '{config.TRAIN_FILE}'.")
     df_full = pd.concat([df_internal, df_external], ignore_index=True)
 
+    if 'Thời điểm giao dịch/rao bán' in df_full.columns:
+        df_full['Thời điểm giao dịch/rao bán'] = pd.to_datetime(
+            df_full['Thời điểm giao dịch/rao bán'], format="%d/%m/%Y", errors='coerce'
+        )
+        today = pd.to_datetime("today")
+        df_full['Số ngày từ giao dịch đến hiện tại'] = (today - df_full['Thời điểm giao dịch/rao bán']).dt.days
+    else:
+        print("WARNING: 'Thời điểm giao dịch/rao bán' column is missing from data.")
+
     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
     df_testable = df_full.dropna(subset=['Đơn giá đất', target_col]).copy()
     df_testable = df_testable[df_testable[target_col] != 0]
