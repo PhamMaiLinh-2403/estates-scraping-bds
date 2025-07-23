@@ -192,9 +192,6 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     log_preds = model.predict(X_test_scaled)
     preds = np.expm1(log_preds)
     y_test_true = np.expm1(y_test)
-    print(f'- Mean absolute error: {mean_absolute_error(y_test_true, preds):.3f}')
-    print(f"- RMSE: {mean_squared_error(y_test_true, preds, squared=False):.3f}")
-    print(f'- R2 score: {r2_score(y_test_true, preds):.3f}')
 
     # Predict missing
     predict_mask = df[target_col].isna()
@@ -226,9 +223,11 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     predictions[predictions < 0] = 0
 
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
+    print(f'- Mean absolute error: {mean_absolute_error(y_test_true, preds):.3f}')
+    print(f"- RMSE: {mean_squared_error(y_test_true, preds):.3f}")
+    print(f'- R2 score: {r2_score(y_test_true, preds):.3f}')
     print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
     return df
-
 
 # --- Pipeline Steps ---
 def run_scrape_urls():
