@@ -73,7 +73,6 @@ bandit.json
 *.db
 
 # Project-specific
-data/
 output/
 *.csv
 *.xlsx
