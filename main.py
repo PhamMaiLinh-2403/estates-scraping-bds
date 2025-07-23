@@ -4,11 +4,13 @@ import os
 import random
 import time
 import re
+from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import numpy as np
 from sklearn.svm import SVR
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
@@ -140,32 +142,70 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     # --- 2. Feature Engineering & Preprocessing for ML ---
     numeric_features = [
-        'Số tầng công trình', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
+        'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
         'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
-        'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất'
+        'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất',
+        'Số ngày tính từ lúc đăng tin'
     ]
     categorical_features = [
         'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
-        'Đường phố', 'Hình dạng'
+        'Đường phố','Lợi thế kinh doanh', 'Hình dạng'
     ]
     features = numeric_features + categorical_features
 
-    X_train = df_train[features].copy()
-    y_train = df_train[target_col].copy()
+    # X_train = df_train[features].copy()
+    # y_train = df_train[target_col].copy()
 
-    # LOG TRANSFORM THE TARGET VARIABLE
-    y_train_log = np.log1p(y_train)
+    # for col in numeric_features:
+    #     X_train[col] = X_train[col].fillna(X_train[col].median())
+    # for col in categorical_features:
+    #     X_train[col] = X_train[col].astype(str).fillna('Missing')
+    #     print(f'NaN rows: {(df[df['Xã/Phường/Thị trấn'].isna() | df['Đường phố'].isna() |df['Lợi thế kinh doanh'].isna() | df['Hình dạng'].isna()]).shape}')
+
+    # # LOG TRANSFORM THE TARGET VARIABLE
+    # y_train_log = np.log1p(y_train)
+
+    # def sanitize_column_name(col: str) -> str:
+    #     return re.sub(r'[\[\]{},:"\\/]', '_', col)
+
+    # X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, dtype=float)
+    # X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
+
+    cat_get_dummies = [
+        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 
+        'Xã/Phường/Thị trấn', 'Đường phố', 'Hình dạng'
+    ]
+
+    # features = numeric_features + categorical_features
+
+    X = df_train[features].copy()
+    y = df_train[target_col].copy()
 
     for col in numeric_features:
-        X_train[col] = X_train[col].fillna(X_train[col].median())
+        X[col] = X[col].fillna(X[col].median())
     for col in categorical_features:
-        X_train[col] = X_train[col].astype(str).fillna('Missing')
+        X[col] = X[col].astype(str).fillna('Missing')
 
     def sanitize_column_name(col: str) -> str:
         return re.sub(r'[\[\]{},:"\\/]', '_', col)
 
-    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, dtype=float)
-    X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
+    # --- 3. Train-Test Split ---
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    print(f"Data split into {len(X_train)} training records and {len(X_test)} testing records.")
+
+     # LOG TRANSFORM THE TARGET VARIABLE
+    y_train_log = np.log1p(y_train)
+
+    # --- 4. Preprocessing ---
+    # One-Hot Encode categorical features
+    def sanitize_column_name(col: str) -> str:
+        
+        return re.sub(r'[\[\]{},:"\\/]', '_', col)
+
+    X_train_encoded = pd.get_dummies(X_train, columns=cat_get_dummies, dtype=float)
+    X_train_encoded['Lợi thế kinh doanh'] = X_train['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
+    # X_test_encoded = pd.get_dummies(X_test, columns=cat_get_dummies, dtype=float)
+    # X_test_encoded['Lợi thế kinh doanh'] = X_test['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
 
     # SCALE FEATURES (CRITICAL FOR SVR)
     scaler = StandardScaler()
@@ -430,8 +470,17 @@ def run_feature_engineering():
     else:
         print("  - No rows dropped due to missing 'Đơn giá đất'.")
 
+    print(f'Processing time columns...')
+    df.dropna(subset=['Thời điểm giao dịch/rao bán'], inplace=True)
+    df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(df['Thời điểm giao dịch/rao bán'], format='%d/%m/%Y')
+    today = date.today()
+    df['Số ngày tính từ lúc đăng tin'] = df['Thời điểm giao dịch/rao bán'].apply(lambda x: (today - x.date()).days)
+    print(df[['Số ngày tính từ lúc đăng tin','Thời điểm giao dịch/rao bán']].head())
+
     # Ensure the final column order is correct
-    df_final = df.reindex(columns=config.FINAL_COLUMNS)
+    FE_COLUMNS = config.FINAL_COLUMNS
+    FE_COLUMNS.append('Số ngày tính từ lúc đăng tin')
+    df_final = df.reindex(columns=FE_COLUMNS)
 
     # Save the final result
     df_final.to_excel(config.FEATURE_ENGINEERED_OUTPUT_FILE, index=False)

@@ -99,15 +99,31 @@ def test_alley_width_model_accuracy():
     print(f"Found {len(df_testable)} records with valid target values for testing.")
 
     # --- 2. Feature Preparation ---
+    # numeric_features = [
+    #     'Số tầng công trình', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
+    #     'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
+    #     'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất'
+    # ]
+    # categorical_features = [
+    #     'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
+    #     'Đường phố', 'Hình dạng'
+    # ]
+
     numeric_features = [
-        'Số tầng công trình', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
+        'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
         'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
-        'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất'
+        'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất',
+        'Số ngày tính từ lúc đăng tin'
     ]
     categorical_features = [
         'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
-        'Đường phố', 'Hình dạng'
+        'Đường phố','Lợi thế kinh doanh', 'Hình dạng'
     ]
+    cat_get_dummies = [
+        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 
+        'Xã/Phường/Thị trấn', 'Đường phố', 'Hình dạng'
+    ]
+
     features = numeric_features + categorical_features
 
     X = df_testable[features]
@@ -127,8 +143,10 @@ def test_alley_width_model_accuracy():
     def sanitize_column_name(col: str) -> str:
         return re.sub(r'[\[\]{},:"\\/]', '_', col)
 
-    X_train_encoded = pd.get_dummies(X_train, columns=categorical_features, dtype=float)
-    X_test_encoded = pd.get_dummies(X_test, columns=categorical_features, dtype=float)
+    X_train_encoded = pd.get_dummies(X_train, columns=cat_get_dummies, dtype=float)
+    X_train_encoded['Lợi thế kinh doanh'] = X_train['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
+    X_test_encoded = pd.get_dummies(X_test, columns=cat_get_dummies, dtype=float)
+    X_test_encoded['Lợi thế kinh doanh'] = X_test['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
 
     X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
     X_test_encoded.columns = [sanitize_column_name(c) for c in X_test_encoded.columns]
