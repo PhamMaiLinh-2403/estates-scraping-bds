@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import numpy as np
+import lightgbm as lgb
 from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
@@ -108,7 +109,7 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
 
 def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values using a Support Vector Regressor (SVR).
+    Predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values using LightGBM.
     Applies log transform on the target before train-test split and evaluates accuracy.
     """
     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
@@ -143,11 +144,7 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     ]
     categorical_features = [
         'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
-        'Đường phố','Lợi thế kinh doanh', 'Hình dạng'
-    ]
-    cat_get_dummies = [
-        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã',
-        'Xã/Phường/Thị trấn', 'Đường phố', 'Hình dạng'
+        'Đường phố', 'Lợi thế kinh doanh', 'Hình dạng'
     ]
     features = numeric_features + categorical_features
 
@@ -159,37 +156,22 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     for col in categorical_features:
         X[col] = X[col].astype(str).fillna('Missing')
 
+    # Manual ordinal encoding for 'Lợi thế kinh doanh'
+    X['Lợi thế kinh doanh'] = X['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
+
+    # Train-test split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     print(f"Data split into {len(X_train)} training records and {len(X_test)} testing records.")
 
-    def sanitize_column_name(col: str) -> str:
-        return re.sub(r'[\[\]{},:"\\/]', '_', col)
+    # Identify categorical features for LightGBM
+    lgb_categorical = [col for col in categorical_features if col != 'Lợi thế kinh doanh']
 
-    # Encode train
-    X_train_encoded = pd.get_dummies(X_train, columns=cat_get_dummies, dtype=float)
-    X_train_encoded['Lợi thế kinh doanh'] = X_train['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
-    X_train_encoded.columns = [sanitize_column_name(c) for c in X_train_encoded.columns]
-
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train_encoded)
-
-    # Train model
-    model = SVR()
-    model.fit(X_train_scaled, y_train)
-
-    # Encode and scale test
-    X_test_encoded = pd.get_dummies(X_test, columns=cat_get_dummies, dtype=float)
-    X_test_encoded['Lợi thế kinh doanh'] = X_test['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
-    X_test_encoded.columns = [sanitize_column_name(c) for c in X_test_encoded.columns]
-
-    # Align test columns
-    for col in set(X_train_encoded.columns) - set(X_test_encoded.columns):
-        X_test_encoded[col] = 0
-    X_test_encoded = X_test_encoded[X_train_encoded.columns]
-    X_test_scaled = scaler.transform(X_test_encoded)
+    # Train LightGBM
+    model = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
+    model.fit(X_train, y_train, categorical_feature=lgb_categorical)
 
     # Evaluate
-    log_preds = model.predict(X_test_scaled)
+    log_preds = model.predict(X_test)
     preds = np.expm1(log_preds)
     y_test_true = np.expm1(y_test)
 
@@ -205,26 +187,15 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
         X_predict[col] = X_predict[col].fillna(X[col].median())
     for col in categorical_features:
         X_predict[col] = X_predict[col].astype(str).fillna('Missing')
+    X_predict['Lợi thế kinh doanh'] = X_predict['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
 
-    X_predict_encoded = pd.get_dummies(X_predict, columns=categorical_features, dtype=float)
-    X_predict_encoded['Lợi thế kinh doanh'] = X_predict['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
-    X_predict_encoded.columns = [sanitize_column_name(c) for c in X_predict_encoded.columns]
-
-    for col in set(X_train_encoded.columns) - set(X_predict_encoded.columns):
-        X_predict_encoded[col] = 0
-    for col in set(X_predict_encoded.columns) - set(X_train_encoded.columns):
-        X_predict_encoded.drop(columns=col, inplace=True)
-
-    X_predict_encoded = X_predict_encoded[X_train_encoded.columns]
-    X_predict_scaled = scaler.transform(X_predict_encoded)
-
-    log_predictions = model.predict(X_predict_scaled)
+    log_predictions = model.predict(X_predict)
     predictions = np.expm1(log_predictions)
     predictions[predictions < 0] = 0
 
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
     print(f'- Mean absolute error: {mean_absolute_error(y_test_true, preds):.3f}')
-    print(f"- RMSE: {mean_squared_error(y_test_true, preds):.3f}")
+    print(f"- RMSE: {mean_squared_error(y_test_true, preds, squared=False):.3f}")
     print(f'- R2 score: {r2_score(y_test_true, preds):.3f}')
     print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
     return df
