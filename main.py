@@ -12,7 +12,7 @@ import numpy as np
 import lightgbm as lgb
 from sklearn.svm import SVR
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from sklearn.metrics import r2_score, root_mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import StandardScaler
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
@@ -165,13 +165,39 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     # Identify categorical features for LightGBM
     lgb_categorical = [col for col in categorical_features if col != 'Lợi thế kinh doanh']
+    X_train = pd.get_dummies(X_train, columns=lgb_categorical)
+    X_test = pd.get_dummies(X_test, columns=lgb_categorical)
+
+    # Remove banned patterns for column names
+    def sanitize_column_name(col: str) -> str:
+        return re.sub(r'[\[\]{},:"\\/]', '_', col)
+    X_train.columns = [sanitize_column_name(col) for col in X_train.columns]
+    X_test.columns = [sanitize_column_name(col) for col in X_test.columns]
+
+    # Align columns
+    train_cols = X_train.columns
+    test_cols = X_test.columns
+    missing_in_test = set(train_cols) - set(test_cols)
+    for c in missing_in_test:
+        X_test[c] = 0
+    extra_in_test = set(test_cols) - set(train_cols)
+    X_test = X_test.drop(columns=list(extra_in_test))
+    X_test_aligned = X_test[train_cols]
+    # y_train.columns = y_train.str.replace(r'[\"\\/:{}]', '_', regex=True)
+    # y_test.columns = y_test.str.replace(r'[\"\\/:{}]', '_', regex=True)
+    # X_train.to_csv('X_train.csv', index=False)
+    # X_test.to_csv('X_test.csv', index=False)
+    # y_train.to_csv('y_train.csv', index=False)
+    # y_test.to_csv('y_test.csv', index=False)
+
 
     # Train LightGBM
     model = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
-    model.fit(X_train, y_train, categorical_feature=lgb_categorical)
+    #model.fit(X_train, y_train, categorical_feature=lgb_categorical)
+    model.fit(X_train, y_train)
 
     # Evaluate
-    log_preds = model.predict(X_test)
+    log_preds = model.predict(X_test_aligned)
     preds = np.expm1(log_preds)
     y_test_true = np.expm1(y_test)
 
@@ -188,6 +214,18 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     for col in categorical_features:
         X_predict[col] = X_predict[col].astype(str).fillna('Missing')
     X_predict['Lợi thế kinh doanh'] = X_predict['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
+    X_predict = pd.get_dummies(X_predict, columns=lgb_categorical)
+    X_predict.columns = [sanitize_column_name(col) for col in X_predict.columns]
+
+    # Align columns
+    train_cols = X_train.columns
+    test_cols = X_predict.columns
+    missing_in_test = set(train_cols) - set(test_cols)
+    for c in missing_in_test:
+        X_predict[c] = 0
+    extra_in_test = set(test_cols) - set(train_cols)
+    X_predict = X_predict.drop(columns=list(extra_in_test))
+    X_predict = X_predict[train_cols]
 
     log_predictions = model.predict(X_predict)
     predictions = np.expm1(log_predictions)
@@ -195,7 +233,7 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
     print(f'- Mean absolute error: {mean_absolute_error(y_test_true, preds):.3f}')
-    print(f"- RMSE: {mean_squared_error(y_test_true, preds, squared=False):.3f}")
+    print(f"- RMSE: {root_mean_squared_error(y_test_true, preds):.3f}")
     print(f'- R2 score: {r2_score(y_test_true, preds):.3f}')
     print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
     return df
@@ -415,7 +453,6 @@ def run_feature_engineering():
     df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(df['Thời điểm giao dịch/rao bán'], format='%d/%m/%Y')
     today = date.today()
     df['Số ngày tính từ lúc đăng tin'] = df['Thời điểm giao dịch/rao bán'].apply(lambda x: (today - x.date()).days)
-    print(df[['Số ngày tính từ lúc đăng tin','Thời điểm giao dịch/rao bán']].head())
 
     # Ensure the final column order is correct
     FE_COLUMNS = config.FINAL_COLUMNS
@@ -440,16 +477,16 @@ def run_ml_imputation():
     print("Attempting to predict and fill missing alley widths using ML model...")
     df_imputed = _predict_alley_width_ml_step(df)
 
-    # Re-calculate business advantage as it depends on alley width
-    print("Re-calculating 'Lợi thế kinh doanh' with imputed alley widths...")
-    df_imputed['Lợi thế kinh doanh'] = df_imputed.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
+    # # Re-calculate business advantage as it depends on alley width
+    # print("Re-calculating 'Lợi thế kinh doanh' with imputed alley widths...")
+    # df_imputed['Lợi thế kinh doanh'] = df_imputed.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
 
-    # Ensure the final column order is correct
-    df_final = df_imputed.reindex(columns=config.FINAL_COLUMNS)
+    # # Ensure the final column order is correct
+    # df_final = df_imputed.reindex(columns=config.FINAL_COLUMNS)
 
-    df_final.to_excel(config.ML_IMPUTED_OUTPUT_FILE, index=False)
-    print(
-        f"Successfully imputed features and saved {len(df_final)} records to '{config.ML_IMPUTED_OUTPUT_FILE}'")
+    # df_final.to_excel(config.ML_IMPUTED_OUTPUT_FILE, index=False)
+    # print(
+    #     f"Successfully imputed features and saved {len(df_final)} records to '{config.ML_IMPUTED_OUTPUT_FILE}'")
 
 
 if __name__ == "__main__":
