@@ -120,22 +120,28 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
 
     try:
         df_external_train = pd.read_excel(config.TRAIN_FILE)
+        df_external_train.columns = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
+       'Đường phố', 'Chi tiết', 'Nguồn thông tin',
+       'Tình trạng giao dịch', 'Thời điểm giao dịch/rao bán',
+       'Thông tin liên hệ', 'Giá rao bán/giao dịch', 'Giá ước tính',
+       'Loại đơn giá (đ/m2 hoặc đ/m ngang)', 'Đơn giá đất',
+       'Số tầng công trình', 'Chất lượng còn lại',
+       'Giá trị công trình xây dựng', 'Diện tích đất (m2)',
+       'Tổng diện tích sàn', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)',
+       'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (SS)',
+       'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất',
+       'Hình ảnh của bài đăng', 'Ảnh chụp màn hình thông tin thu thập',
+       'Yếu tố khác', 'Lợi thế kinh doanh']
         print(f"- Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
     except FileNotFoundError:
         df_external_train = pd.DataFrame()
         print(f"- WARNING: External training data not found at '{config.TRAIN_FILE}'.")
+    
+    print(f'Calculating additional features for One Housing...')
 
-    df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-    initial_train_count = len(df_train)
-    df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
-    df_train = df_train[df_train[target_col] != 0].copy()
-
-    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows).")
-
-    if len(df_train) < 50:
-        print("- Not enough training data (< 50 records). Skipping alley width prediction.")
-        return df
-
+    # df_external_train.dropna(subset=['Thời điểm giao dịch/rao bán'], inplace=True)
+    df_external_train['Số ngày tính từ lúc đăng tin'] = 0
+    
     numeric_features = [
         'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
         'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
@@ -148,13 +154,33 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     ]
     features = numeric_features + categorical_features
 
+    df_train = pd.concat([df_external_train[features], df_internal_train[features]], ignore_index=True)
+    initial_train_count = len(df_train)
+    df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
+    df_train = df_train[df_train[target_col] != 0].copy()
+
+    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows).")
+
+    if len(df_train) < 50:
+        print("- Not enough training data (< 50 records). Skipping alley width prediction.")
+        return df
+
+    
+
     X = df_train[features].copy()
     y = np.log1p(df_train[target_col])
 
     for col in numeric_features:
+        print(f'NaN values in "{col}": {X[col].isna().sum()}')
         X[col] = X[col].fillna(X[col].median())
     for col in categorical_features:
-        X[col] = X[col].astype(str).fillna('Missing')
+        # X[col] = X[col].astype(str).fillna('Missing')
+        old_length = X.shape[0]
+        na_index = X[X[col].isna()].index
+        X.dropna(subset=[col], inplace=True)
+        y.drop(na_index, inplace=True)
+        new_length = X.shape[0]
+        print(f"- Dropped {old_length - new_length} records with missing '{col}'.")
 
     # Manual ordinal encoding for 'Lợi thế kinh doanh'
     X['Lợi thế kinh doanh'] = X['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
