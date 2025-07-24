@@ -477,16 +477,16 @@ def run_ml_imputation():
     print("Attempting to predict and fill missing alley widths using ML model...")
     df_imputed = _predict_alley_width_ml_step(df)
 
-    # # Re-calculate business advantage as it depends on alley width
-    # print("Re-calculating 'Lợi thế kinh doanh' with imputed alley widths...")
-    # df_imputed['Lợi thế kinh doanh'] = df_imputed.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
+    # Re-calculate business advantage as it depends on alley width
+    print("Re-calculating 'Lợi thế kinh doanh' with imputed alley widths...")
+    df_imputed['Lợi thế kinh doanh'] = df_imputed.apply(lambda row: FeatureEngineer.calculate_business_advantage(row.to_dict()), axis=1)
 
-    # # Ensure the final column order is correct
-    # df_final = df_imputed.reindex(columns=config.FINAL_COLUMNS)
+    # Ensure the final column order is correct
+    df_final = df_imputed.reindex(columns=config.FINAL_COLUMNS)
 
-    # df_final.to_excel(config.ML_IMPUTED_OUTPUT_FILE, index=False)
-    # print(
-    #     f"Successfully imputed features and saved {len(df_final)} records to '{config.ML_IMPUTED_OUTPUT_FILE}'")
+    df_final.to_excel(config.ML_IMPUTED_OUTPUT_FILE, index=False)
+    print(
+        f"Successfully imputed features and saved {len(df_final)} records to '{config.ML_IMPUTED_OUTPUT_FILE}'")
 
 
 if __name__ == "__main__":
