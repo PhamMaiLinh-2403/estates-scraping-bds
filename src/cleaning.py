@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional
 import random
+import unicodedata
 
 import numpy as np
 import pandas as pd
@@ -718,9 +719,16 @@ class DataCleaner:
             ("ba gác tránh", 2.5),
             ("xe máy tránh", 2.5),
         ]
-        for kw, width in vehicle_fallback:
-            if kw in text:
-                return width if width < 15 else None
+
+        def normalize(text):
+            return unicodedata.normalize('NFC', text.lower())
+
+        def match_vehicle_width(text):
+            norm_text = normalize(text)
+            for kw, width in vehicle_fallback:
+                if normalize(kw) in norm_text:
+                    return width if width < 15 else None
+            return None
 
         # === 3. Descriptive fallback
         descriptive_fallback = [
