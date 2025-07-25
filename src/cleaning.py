@@ -667,22 +667,23 @@ class DataCleaner:
         except (json.JSONDecodeError, TypeError):
             pass
 
-        alley_kw = r"(ngõ|hẻm|ngách|kiệt|đường\s+vào|lối\s+vào|trước\s+nhà|đường\s+trước\s+nhà)"
-        vehicle_kw = r"(oto|ô\s*tô|xe\s+hơi|xe\s+tải|ba\s+gác|xe\s+máy)"
-        approx_kw = r"(rộng\s*)?(khoảng|gần|trên\s+dưới|tầm|xấp\s+xỉ)?\s*"
-        num_pat = r"(\d{1,2}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"  # limit to 1-2 digit widths
+        alley_kw = r"(?:ngõ|hẻm|ngách|kiệt|đường\s+vào|lối\s+vào|trước\s+nhà|đường\s+trước\s+nhà)"
+        vehicle_kw = r"(?:oto|ô\s*tô|xe\s+hơi|xe\s+tải|ba\s+gác|xe\s+máy)"
+        approx_kw = r"(?:rộng\s*)?(?:khoảng|gần|trên\s+dưới|tầm|xấp\s+xỉ)?\s*"
+        num_pat = r"(\d{1,2}(?:[.,]\d{1,2})?)\s*(m|mét)(?!²|2)"
+        alley_phrase = rf"(?:{alley_kw}(?:\s+{alley_kw})?)"
 
         widths: List[float] = []
 
         # Focus only on patterns that closely associate width and alley context
         patterns = [
-            rf"\b{alley_kw}\b\s*{num_pat}\b",
-            rf"{num_pat}\b\s*\b{alley_kw}\b",
-            rf"\b{alley_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
-            rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{0, 20}\b{alley_kw}\b",
-            rf"\b{alley_kw}\b[^.,;:\n\r]{0, 30}\b{vehicle_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
-            rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{0, 20}\b{vehicle_kw}\b[^.,;:\n\r]{0, 30}\b{alley_kw}\b",
-            rf"\btiếp giáp\b[^.,;:\n\r]{0, 20}\b{alley_kw}\b[^.,;:\n\r]{0, 20}\b{approx_kw}{num_pat}\b",
+            rf"\b{alley_phrase}\b\s*{num_pat}\b",
+            rf"{num_pat}\b\s*\b{alley_phrase}\b",
+            rf"\b{alley_phrase}\b[^.,;:\n\r]{{0,20}}\b{approx_kw}{num_pat}\b",
+            rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{{0,20}}\b{alley_phrase}\b",
+            rf"\b{alley_phrase}\b[^.,;:\n\r]{{0,30}}\b{vehicle_kw}\b[^.,;:\n\r]{{0,20}}\b{approx_kw}{num_pat}\b",
+            rf"\b{approx_kw}{num_pat}\b[^.,;:\n\r]{{0,20}}\b{vehicle_kw}\b[^.,;:\n\r]{{0,30}}\b{alley_phrase}\b",
+            rf"\btiếp giáp\b[^.,;:\n\r]{{0,20}}\b{alley_phrase}\b[^.,;:\n\r]{{0,20}}\b{approx_kw}{num_pat}\b",
         ]
 
         for pattern in patterns:
@@ -708,7 +709,9 @@ class DataCleaner:
             ("ô tô đỗ cửa", 3.5),
             ("oto vào", 3.5),
             ("ô tô vào", 3.5),
+            ("ô tô ra", 3.5),
             ("oto đỗ cửa", 3.5),
+            ("ô tô quay đầu", 5),
             ("hẻm ô tô", 4.0),
             ("hẻm xe hơi", 4.0),
             ("ngõ ô tô", 4.0),
