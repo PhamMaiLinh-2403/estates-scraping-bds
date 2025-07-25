@@ -654,10 +654,11 @@ class DataCleaner:
         """
         Extract alley width from listing title and description.
         """
-        text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+        text = f"{row.get('title', '')} {row.get('description', '')}"
+        norm_text = unicodedata.normalize('NFC', text.lower())
 
         # === 0. Explicitly on the main road
-        if is_on_main_road(text):
+        if is_on_main_road(norm_text):
             return 0.0
 
         try:
@@ -676,7 +677,6 @@ class DataCleaner:
 
         widths: List[float] = []
 
-        # Focus only on patterns that closely associate width and alley context
         patterns = [
             rf"\b{alley_phrase}\b\s*{num_pat}\b",
             rf"{num_pat}\b\s*\b{alley_phrase}\b",
@@ -688,7 +688,7 @@ class DataCleaner:
         ]
 
         for pattern in patterns:
-            for match in re.findall(pattern, text):
+            for match in re.findall(pattern, norm_text):
                 if isinstance(match, tuple):
                     num_str = next((m for m in match if re.match(r"^\d", m)), None)
                 else:
@@ -696,7 +696,6 @@ class DataCleaner:
                 width = parse_and_clean_width(num_str)
                 if width:
                     widths.append(width)
-
 
         if widths:
             return min(widths) if min(widths) < 10 else None
@@ -712,7 +711,7 @@ class DataCleaner:
             ("ô tô vào", 3.5),
             ("ô tô ra", 3.5),
             ("oto đỗ cửa", 3.5),
-            ("ô tô quay đầu", 5),
+            ("ô tô quay đầu", 5.0),
             ("hẻm ô tô", 4.0),
             ("hẻm xe hơi", 4.0),
             ("ngõ ô tô", 4.0),
@@ -720,15 +719,9 @@ class DataCleaner:
             ("xe máy tránh", 2.5),
         ]
 
-        def normalize(text):
-            return unicodedata.normalize('NFC', text.lower())
-
-        def match_vehicle_width(text):
-            norm_text = normalize(text)
-            for kw, width in vehicle_fallback:
-                if normalize(kw) in norm_text:
-                    return width if width < 15 else None
-            return None
+        for kw, width in vehicle_fallback:
+            if unicodedata.normalize('NFC', kw.lower()) in norm_text:
+                return width if width < 15 else None
 
         # === 3. Descriptive fallback
         descriptive_fallback = [
@@ -737,12 +730,12 @@ class DataCleaner:
             ("hẻm thông", 2.5),
             ("đường thông", 2.5),
         ]
-        for kw, width in vehicle_fallback:
-            if kw in text:
+
+        for kw, width in descriptive_fallback:
+            if unicodedata.normalize('NFC', kw.lower()) in norm_text:
                 return width if width < 15 else None
-            # fuzzy partial match within a window
-            elif re.search(rf"\b{re.escape(kw)}", text):
-                return width if width < 15 else None
+
+        return None
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
