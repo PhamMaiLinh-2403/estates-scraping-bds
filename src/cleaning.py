@@ -729,11 +729,12 @@ class DataCleaner:
             ("hẻm thông", 2.5),
             ("đường thông", 2.5),
         ]
-        for kw, width in descriptive_fallback:
+        for kw, width in vehicle_fallback:
             if kw in text:
-                return width
-
-        return None
+                return width if width < 15 else None
+            # fuzzy partial match within a window
+            elif re.search(rf"\b{re.escape(kw)}", text):
+                return width if width < 15 else None
 
     @staticmethod
     def extract_distance_to_main_road(row: Dict[str, Any]) -> Optional[float]:
