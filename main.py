@@ -128,7 +128,7 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
        'Số tầng công trình', 'Chất lượng còn lại',
        'Giá trị công trình xây dựng', 'Diện tích đất (m2)',
        'Tổng diện tích sàn', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)',
-       'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (SS)',
+       'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)',
        'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất',
        'Hình ảnh của bài đăng', 'Ảnh chụp màn hình thông tin thu thập',
        'Yếu tố khác', 'Lợi thế kinh doanh']
@@ -154,7 +154,7 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     ]
     features = numeric_features + categorical_features
 
-    df_train = pd.concat([df_external_train[features], df_internal_train[features]], ignore_index=True)
+    df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
     initial_train_count = len(df_train)
     df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
     df_train = df_train[df_train[target_col] != 0].copy()
@@ -164,8 +164,6 @@ def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
     if len(df_train) < 50:
         print("- Not enough training data (< 50 records). Skipping alley width prediction.")
         return df
-
-    
 
     X = df_train[features].copy()
     y = np.log1p(df_train[target_col])
