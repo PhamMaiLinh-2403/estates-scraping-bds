@@ -665,7 +665,7 @@ class DataCleaner:
             other_info_json = row.get("other_info", "{}") or "{}"
             val = json.loads(other_info_json).get("Đường vào")
             w = parse_and_clean_width(val)
-            return w if w and w < 10 else None
+            return w if w and w < 15 else None
         except (json.JSONDecodeError, TypeError):
             pass
 
