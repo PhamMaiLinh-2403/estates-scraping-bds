@@ -36,7 +36,7 @@ def drop_mixed_listings(df: pd.DataFrame):
     """
     initial_count = len(df)
 
-    if 'title' not in df.columns or 'description' not in df.columns:
+    if 'title' not in df.columns and 'description' not in df.columns:
         return df
 
     # Create a combined text series for searching, handling NaNs
@@ -66,15 +66,15 @@ def is_on_main_road(text: str) -> bool:
     near_but_not_on_patterns = [
         r"(cách|ra|gần|view|hướng\s+ra|đi\s+ra|đi\s+ra\s+đến)\s+(mặt\s+(phố|đường|tiền))",
         r"(view|hướng\s+ra)\s+(phố|đường|mặt\s+phố)",
-        r"\b\d{1,3}\s*m(?:ét)?\s*(tới|ra|cách)\s+(mặt\s+(phố|đường|tiền))",
-        r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))",
+        r"\b\d{1,100}\s*m(?:ét)?\s*(tới|ra|cách)\s+(mặt\s+(phố|đường|tiền))",
+        r"\bkhoảng\s*\d{1,100}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))",
         r"(gần|kế|bên cạnh)\s+(phố|đường|mặt\s+phố|mặt\s+tiền)",
         r"(cách|ra|gần|view|hướng\s+ra|đi\s+ra|đi\s+ra\s+đến)\s+(phố|đường|tiền)",
         r"(view|hướng\s+ra)\s+(phố|đường)",
-        r"\b\d{1,3}\s*m(?:ét)?\s*(đến|tới|ra|cách)\s+(phố|đường|tiền)",
-        r"\bkhoảng\s*\d{1,3}\s*m\s*(đến|ra|tới|cách)\s+(phố|đường|tiền)",
+        r"\b\d{1,100}\s*m(?:ét)?\s*(đến|tới|ra|cách)\s+(phố|đường|tiền)",
+        r"\bkhoảng\s*\d{1,100}\s*m\s*(đến|ra|tới|cách)\s+(phố|đường|tiền)",
         r"(gần|kế|bên cạnh)\s+(phố|đường)",
-        r"\b\d{1,3}\s*m\s*(cách|ra|tới|đến)?\s*(phố|đường|tiền)"
+        r"\b\d{1,100}\s*m\s*(cách|ra|tới|đến)?\s*(phố|đường|tiền)"
     ]
 
     for pat in near_but_not_on_patterns:
@@ -83,9 +83,9 @@ def is_on_main_road(text: str) -> bool:
 
     # === 2. Positive indicators — property is ON a main road
     direct_main_road_patterns = [
-        r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc|căn hộ)?\s*(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
-        r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc|căn hộ)?\s*(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
-        r"(nằm|tọa lạc)\s+(trên|tại)\s+trục\s+(đường|phố)\s+(chính|lớn)",
+        r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc|căn hộ|ở)?\s*(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
+        r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc|căn hộ|ở)?\s*(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
+        r"(nằm|tọa lạc|ở)\s+(trên|tại)\s+trục\s+(đường|phố)\s+(chính|lớn)",
         r"(nhà|biệt thự|căn nhà|căn hộ)\s+phố"
     ]
 
@@ -165,7 +165,6 @@ class DataCleaner:
         if not isinstance(text_value, str):
             return None
 
-        # A more robust regex to capture a sequence of digits, dots, and commas.
         match = re.search(r"([\d\.,]+)", text_value)
         if not match:
             return None

@@ -1,7 +1,7 @@
-pandas~=2.3.0
-numpy~=2.2.6
-selenium~=4.33.0
-seleniumbase~=4.39.6
-openpyxl~=3.1.5
-scikit-learn~=1.7.1
+pandas
+numpy
+selenium
+seleniumbase
+openpyxl
+scikit-learn
 lightgbm

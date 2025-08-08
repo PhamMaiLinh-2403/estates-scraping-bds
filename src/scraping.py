@@ -118,7 +118,6 @@ class Scraper:
                 "latitude": coordinates.get("latitude"),
                 "longitude": coordinates.get("longitude"),
                 "short_address": self._get_text(self.driver, '.re__pr-short-description'),
-
                 # Convert these Python objects to valid JSON strings
                 "address_parts": json.dumps(self._scrape_address_parts(), ensure_ascii=False),
                 "main_info": json.dumps(self._scrape_info_items(body), ensure_ascii=False),

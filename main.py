@@ -1,266 +1,20 @@
 import argparse
-import csv
 import os
-import random
-import time
-import re
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
-import numpy as np
-import lightgbm as lgb
-from sklearn.svm import SVR
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, root_mean_squared_error, mean_absolute_error
-from sklearn.preprocessing import StandardScaler
+
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
 from src.cleaning import DataCleaner, drop_mixed_listings
 from src.feature_engineering import FeatureEngineer
 from src.address_standardizer import AddressStandardizer
 from src import config
+from src.utils import save_urls_to_csv, save_details_to_csv, chunks
+from src.tasks import scrape_worker
+from src.ml_model import predict_alley_width
 
-
-# --- File I/O ---
-def save_urls_to_csv(urls, file_path):
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-    with open(file_path, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["url"])
-        writer.writerows([[u] for u in urls])
-
-    print(f"Saved {len(urls)} URLs → {file_path}")
-
-
-def save_details_to_csv(details, file_path):
-    """
-    Saves scraped details to a CSV file, supporting both overwrite and append modes.
-    The behavior is controlled by the `append_mode` setting in `config.py`.
-    """
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-    if not details:
-        print("No new details to save.")
-        return
-
-    # Check if the file exists to determine if we need to write the header
-    file_exists = os.path.exists(file_path)
-
-    # Read the append_mode from config; default to False if not found
-    is_append_mode = config.SCRAPING_DETAILS_CONFIG.get("append_mode", False)
-
-    # Determine mode and header based on config and file existence
-    mode = 'a' if is_append_mode and file_exists else 'w'
-    write_header = not (is_append_mode and file_exists)
-
-    df = pd.DataFrame(details)
-    df.to_csv(
-        file_path,
-        mode=mode,
-        header=write_header,
-        index=False,
-        quoting=csv.QUOTE_ALL
-    )
-
-    if mode == 'a':
-        print(f"Appended {len(details)} new listing records → {file_path}")
-    else:
-        print(f"Saved {len(details)} listing records → {file_path}")
-
-# --- Worker & Concurrency ---
-def chunks(iterable, n):
-    iterable = list(iterable)
-    k, m = divmod(len(iterable), n)
-    start = 0
-
-    for i in range(n):
-        end = start + k + (1 if i < m else 0)
-        yield iterable[start:end]
-        start = end
-
-
-def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
-    """Each worker gets its own driver & scraper."""
-    base = config.SCRAPING_DETAILS_CONFIG.get("stagger_step_sec", 2.0)
-    start_delay = worker_id * base
-    print(f"[Worker {worker_id}]: Sleeping {start_delay:.1f}s before start.")
-    time.sleep(start_delay)
-
-    driver = create_stealth_driver(headless=config.SELENIUM_CONFIG["headless"])
-    scraper = Scraper(driver)
-    results = []
-
-    for idx, url in enumerate(url_subset, 1):
-        print(f"[Worker {worker_id}]  {idx}/{len(url_subset)}  → {url}")
-        data = scraper.scrape_listing_details(url)
-
-        if data:
-            results.append(data)
-        if config.SCRAPING_DETAILS_CONFIG["stagger_mode"] == "random":
-            delay = random.uniform(
-                config.SCRAPING_DETAILS_CONFIG["stagger_step_sec"],
-                config.SCRAPING_DETAILS_CONFIG["stagger_max_sec"],
-            )
-            time.sleep(delay)
-    driver.quit()
-    return results
-
-def _predict_alley_width_ml_step(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values using LightGBM.
-    Applies log transform on the target before train-test split and evaluates accuracy.
-    """
-    target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
-    df_copy = df.copy()
-
-    df_internal_train = df_copy[df_copy['Đơn giá đất'].notna() & df_copy[target_col].notna() & (df_copy[target_col] != 0)]
-    print(f"- Found {len(df_internal_train)} valid internal records for ML training.")
-
-    try:
-        df_external_train = pd.read_excel(config.TRAIN_FILE)
-        df_external_train.columns = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
-       'Đường phố', 'Chi tiết', 'Nguồn thông tin',
-       'Tình trạng giao dịch', 'Thời điểm giao dịch/rao bán',
-       'Thông tin liên hệ', 'Giá rao bán/giao dịch', 'Giá ước tính',
-       'Loại đơn giá (đ/m2 hoặc đ/m ngang)', 'Đơn giá đất',
-       'Số tầng công trình', 'Chất lượng còn lại',
-       'Giá trị công trình xây dựng', 'Diện tích đất (m2)',
-       'Tổng diện tích sàn', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)',
-       'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)',
-       'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất',
-       'Hình ảnh của bài đăng', 'Ảnh chụp màn hình thông tin thu thập',
-       'Yếu tố khác', 'Lợi thế kinh doanh']
-        print(f"- Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
-    except FileNotFoundError:
-        df_external_train = pd.DataFrame()
-        print(f"- WARNING: External training data not found at '{config.TRAIN_FILE}'.")
-    
-    print(f'Calculating additional features for One Housing...')
-
-    # df_external_train.dropna(subset=['Thời điểm giao dịch/rao bán'], inplace=True)
-    df_external_train['Số ngày tính từ lúc đăng tin'] = 0
-    
-    numeric_features = [
-        'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
-        'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp',
-        'Khoảng cách tới trục đường chính (m)', 'Đơn giá đất',
-        'Số ngày tính từ lúc đăng tin'
-    ]
-    categorical_features = [
-        'Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
-        'Đường phố', 'Lợi thế kinh doanh', 'Hình dạng'
-    ]
-    features = numeric_features + categorical_features
-
-    df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-    initial_train_count = len(df_train)
-    df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
-    df_train = df_train[df_train[target_col] != 0].copy()
-
-    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows).")
-
-    if len(df_train) < 50:
-        print("- Not enough training data (< 50 records). Skipping alley width prediction.")
-        return df
-
-    X = df_train[features].copy()
-    y = np.log1p(df_train[target_col])
-
-    for col in numeric_features:
-        print(f'NaN values in "{col}": {X[col].isna().sum()}')
-        X[col] = X[col].fillna(X[col].median())
-    for col in categorical_features:
-        # X[col] = X[col].astype(str).fillna('Missing')
-        old_length = X.shape[0]
-        na_index = X[X[col].isna()].index
-        X.dropna(subset=[col], inplace=True)
-        y.drop(na_index, inplace=True)
-        new_length = X.shape[0]
-        print(f"- Dropped {old_length - new_length} records with missing '{col}'.")
-
-    # Manual ordinal encoding for 'Lợi thế kinh doanh'
-    X['Lợi thế kinh doanh'] = X['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
-
-    # Train-test split
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    print(f"Data split into {len(X_train)} training records and {len(X_test)} testing records.")
-
-    # Identify categorical features for LightGBM
-    lgb_categorical = [col for col in categorical_features if col != 'Lợi thế kinh doanh']
-    X_train = pd.get_dummies(X_train, columns=lgb_categorical)
-    X_test = pd.get_dummies(X_test, columns=lgb_categorical)
-
-    # Remove banned patterns for column names
-    def sanitize_column_name(col: str) -> str:
-        return re.sub(r'[\[\]{},:"\\/]', '_', col)
-    X_train.columns = [sanitize_column_name(col) for col in X_train.columns]
-    X_test.columns = [sanitize_column_name(col) for col in X_test.columns]
-
-    # Align columns
-    train_cols = X_train.columns
-    test_cols = X_test.columns
-    missing_in_test = set(train_cols) - set(test_cols)
-    for c in missing_in_test:
-        X_test[c] = 0
-    extra_in_test = set(test_cols) - set(train_cols)
-    X_test = X_test.drop(columns=list(extra_in_test))
-    X_test_aligned = X_test[train_cols]
-    # y_train.columns = y_train.str.replace(r'[\"\\/:{}]', '_', regex=True)
-    # y_test.columns = y_test.str.replace(r'[\"\\/:{}]', '_', regex=True)
-    # X_train.to_csv('X_train.csv', index=False)
-    # X_test.to_csv('X_test.csv', index=False)
-    # y_train.to_csv('y_train.csv', index=False)
-    # y_test.to_csv('y_test.csv', index=False)
-
-
-    # Train LightGBM
-    model = lgb.LGBMRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
-    #model.fit(X_train, y_train, categorical_feature=lgb_categorical)
-    model.fit(X_train, y_train)
-
-    # Evaluate
-    log_preds = model.predict(X_test_aligned)
-    preds = np.expm1(log_preds)
-    y_test_true = np.expm1(y_test)
-
-    # Predict missing
-    predict_mask = df[target_col].isna()
-    if not predict_mask.any():
-        print("- No missing alley widths to predict.")
-        return df
-
-    df_to_predict = df[predict_mask]
-    X_predict = df_to_predict[features].copy()
-    for col in numeric_features:
-        X_predict[col] = X_predict[col].fillna(X[col].median())
-    for col in categorical_features:
-        X_predict[col] = X_predict[col].astype(str).fillna('Missing')
-    X_predict['Lợi thế kinh doanh'] = X_predict['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
-    X_predict = pd.get_dummies(X_predict, columns=lgb_categorical)
-    X_predict.columns = [sanitize_column_name(col) for col in X_predict.columns]
-
-    # Align columns
-    train_cols = X_train.columns
-    test_cols = X_predict.columns
-    missing_in_test = set(train_cols) - set(test_cols)
-    for c in missing_in_test:
-        X_predict[c] = 0
-    extra_in_test = set(test_cols) - set(train_cols)
-    X_predict = X_predict.drop(columns=list(extra_in_test))
-    X_predict = X_predict[train_cols]
-
-    log_predictions = model.predict(X_predict)
-    predictions = np.expm1(log_predictions)
-    predictions[predictions < 0] = 0
-
-    df.loc[predict_mask, target_col] = [round(p, 2) for p in predictions]
-    print(f'- Mean absolute error: {mean_absolute_error(y_test_true, preds):.3f}')
-    print(f"- RMSE: {root_mean_squared_error(y_test_true, preds):.3f}")
-    print(f'- R2 score: {r2_score(y_test_true, preds):.3f}')
-    print(f"- Successfully filled {len(predictions)} missing values for '{target_col}'.")
-    return df
 
 # --- Pipeline Steps ---
 def run_scrape_urls():
@@ -442,7 +196,7 @@ def run_cleaning_pipeline():
     columns_to_save = final_columns + ['description']  # Add description for saving
     df_final = df_cleaned.reindex(columns=columns_to_save)
 
-    df_final.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False, quoting=csv.QUOTE_ALL)
+    df_final.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Successfully cleaned and saved {len(df_final)} records to '{config.CLEANED_DETAILS_OUTPUT_FILE}'")
 
 
@@ -499,7 +253,7 @@ def run_ml_imputation():
     df = pd.read_excel(config.FEATURE_ENGINEERED_OUTPUT_FILE)
 
     print("Attempting to predict and fill missing alley widths using ML model...")
-    df_imputed = _predict_alley_width_ml_step(df)
+    df_imputed = predict_alley_width(df)
 
     # Re-calculate business advantage as it depends on alley width
     print("Re-calculating 'Lợi thế kinh doanh' with imputed alley widths...")
