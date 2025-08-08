@@ -13,7 +13,7 @@ from src.address_standardizer import AddressStandardizer
 from src import config
 from src.utils import save_urls_to_csv, save_details_to_csv, chunks
 from src.tasks import scrape_worker
-from src.ml_model import predict_alley_width
+from src.modelling import predict_alley_width
 
 
 # --- Pipeline Steps ---
