@@ -116,6 +116,24 @@ def parse_and_clean_width(text_value: Any) -> Optional[float]:
         return round(value, 2)
     except (ValueError, TypeError):
         return None
+    
+def is_land_only(row: Dict[str, Any]) -> bool:
+    """
+    Detects if a listing is for 'land only' based on simple keywords.
+    Returns True if it's land only, otherwise False.
+    """
+    text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+    land_keywords = ["bán đất", "bán lô đất", "bán nền đất", "bán đất nền"]
+
+    # Check if any of the land keywords are in the text
+    if any(keyword in text for keyword in land_keywords):
+        # Add a check to prevent cases like "bán đất tặng nhà"
+        if "tặng nhà" in text or "có nhà" in text:
+            return False
+        return True
+        
+    return False
+
 
 class DataCleaner:
     """
@@ -248,7 +266,7 @@ class DataCleaner:
             first = parts[0]
 
             # Filter for parts that do NOT start with a digit and do not start with non-street keywords
-            if not first[0].isdigit() and not first.lower().startswith(NON_STREET_KEYWORDS) \
+            if first and not first[0].isdigit() and not first.lower().startswith(NON_STREET_KEYWORDS) \
                     and any(c.isalpha() for c in first) and len(first.split()) <= 5:
                 return "Đường " + first.title()
 
@@ -480,7 +498,10 @@ class DataCleaner:
         def _has_bsmt() -> bool:
             text = f"{row.get('title', '')} {row.get('description', '')}".lower()
             return bool(re.search(r"\b(tầng\s+)?hầm\b", text))
-
+        
+        if row.get('is_land', False):
+            return 0
+        
         # Primary signals
         ptype = _prop_type()
         floors = DataCleaner.extract_num_floors(row)

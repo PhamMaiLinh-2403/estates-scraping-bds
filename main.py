@@ -4,10 +4,11 @@ from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
+import numpy as np
 
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
-from src.cleaning import DataCleaner, drop_mixed_listings
+from src.cleaning import DataCleaner, drop_mixed_listings, is_land_only
 from src.feature_engineering import FeatureEngineer
 from src.address_standardizer import AddressStandardizer
 from src import config
@@ -80,6 +81,10 @@ def run_cleaning_pipeline():
         row_dict = row.to_dict()
         direct_features = DataCleaner.extract_direct_features(row_dict)
 
+        # --- 1. Detect if it is a land-only property ---
+        is_land = is_land_only(row_dict)
+
+        # --- 2. Extract all data ---
         processed_data = {
             'Tỉnh/Thành phố': DataCleaner.extract_city(row_dict),
             'Thành phố/Quận/Huyện/Thị xã': DataCleaner.extract_district(row_dict),
@@ -109,8 +114,17 @@ def run_cleaning_pipeline():
             'Tọa độ (vĩ độ)': row_dict.get('latitude'),
             'Tọa độ (kinh độ)': row_dict.get('longitude'),
             'Hình ảnh của bài đăng': row_dict.get('image_urls'),
-            'description': row_dict.get('description')
+            'description': row_dict.get('description'),
+            'is_land': is_land  # <-- Add the temporary flag here
         }
+
+        # --- 3. Apply special logic if it's land only ---
+        if is_land:
+            processed_data['Số tầng công trình'] = 0
+            processed_data['Đơn giá xây dựng'] = 0
+            processed_data['Tổng diện tích sàn'] = np.nan
+            processed_data['Chất lượng còn lại'] = np.nan
+        
         cleaned_records.append(processed_data)
 
     df_cleaned = pd.DataFrame(cleaned_records)

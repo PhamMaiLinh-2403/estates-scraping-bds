@@ -78,37 +78,37 @@ class FeatureEngineer:
     def calculate_land_unit_price(row: Dict[str, Any]) -> Optional[float]:
         """
         Calculates the land unit price per square meter.
-
-        Formula:
-        Đơn giá đất = (Giá rao bán - Đơn giá nhà) / Diện tích đất
-        where, Đơn giá nhà = Đơn giá xây dựng * Tổng diện tích sàn * Chất lượng còn lại
-        and, Tổng diện tích sàn is pre-calculated in the cleaning step.
+        - If 'is_land' is True, uses a simple formula: Price / Area.
+        - Otherwise, uses the complex formula subtracting building value.
         """
+        # --- Use the temporary boolean flag ---
+        is_land = row.get('is_land', False)
+        
         total_price = row.get('Giá rao bán/giao dịch')
-        construction_cost_per_sqm = row.get('Đơn giá xây dựng')
         land_area = row.get('Diện tích đất (m2)')
+
+        if is_land:
+            if pd.notna(total_price) and pd.notna(land_area) and land_area > 0:
+                return round(total_price / land_area, 2)
+            else:
+                return None
+
+        construction_cost_per_sqm = row.get('Đơn giá xây dựng')
         remaining_quality = row.get('Chất lượng còn lại')
         total_floor_area = row.get('Tổng diện tích sàn')
 
-        # Check for missing essential values, including the pre-calculated total_floor_area
         if pd.isna(total_price) or pd.isna(construction_cost_per_sqm) or \
                 pd.isna(land_area) or pd.isna(remaining_quality) or \
                 pd.isna(total_floor_area):
             return None
 
-        # Handle edge cases to prevent errors
-        if land_area <= 0 or total_floor_area <= 0:
+        if land_area <= 0 or total_floor_area < 0:
             return None
 
-        # The approximation logic is now handled in `extract_built_area`,
-        # so we directly use the `Tổng diện tích sàn` value.
-
-        # Calculate total building value (Đơn giá nhà)
         building_value = construction_cost_per_sqm * total_floor_area * remaining_quality
 
-        # Land value cannot be negative or zero in this context
         if building_value >= total_price:
-            return None
+            return round(total_price / land_area, 2)
 
         land_value = total_price - building_value
         land_unit_price = land_value / land_area
