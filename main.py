@@ -122,8 +122,8 @@ def run_cleaning_pipeline():
         if is_land:
             processed_data['Số tầng công trình'] = 0
             processed_data['Đơn giá xây dựng'] = 0
-            processed_data['Tổng diện tích sàn'] = np.nan
-            processed_data['Chất lượng còn lại'] = np.nan
+            processed_data['Tổng diện tích sàn'] = 0
+            processed_data['Chất lượng còn lại'] = 0
         
         cleaned_records.append(processed_data)
 
@@ -174,14 +174,14 @@ def run_cleaning_pipeline():
     mask_length = df_cleaned['Kích thước chiều dài (m)'].isna()
 
     if mask_length.any():
-        print(f"  - Imputing {mask_length.sum()} missing 'Kích thước chiều dài (m)' values...")
+        print(f"- Imputing {mask_length.sum()} missing 'Kích thước chiều dài (m)' values...")
         df_cleaned.loc[mask_length, 'Kích thước chiều dài (m)'] = df_cleaned.loc[mask_length].apply(fill_length, axis=1)
 
     # 4. Impute missing facade width ('Kích thước mặt tiền (m)')
     mask_facade = df_cleaned['Kích thước mặt tiền (m)'].isna()
 
     if mask_facade.any():
-        print(f"  - Imputing {mask_facade.sum()} missing 'Kích thước mặt tiền (m)' values...")
+        print(f"- Imputing {mask_facade.sum()} missing 'Kích thước mặt tiền (m)' values...")
         df_cleaned.loc[mask_facade, 'Kích thước mặt tiền (m)'] = df_cleaned.loc[mask_facade].apply(fill_facade, axis=1)
 
     # 5. Round the imputed values for cleaner data
@@ -236,9 +236,9 @@ def run_feature_engineering():
     rows_after_drop = len(df)
     dropped_count = initial_rows - rows_after_drop
     if dropped_count > 0:
-        print(f"  - Dropped {dropped_count} rows with missing 'Đơn giá đất' values.")
+        print(f"- Dropped {dropped_count} rows with missing 'Đơn giá đất' values.")
     else:
-        print("  - No rows dropped due to missing 'Đơn giá đất'.")
+        print("- No rows dropped due to missing 'Đơn giá đất'.")
 
     print(f'Processing time columns...')
     df.dropna(subset=['Thời điểm giao dịch/rao bán'], inplace=True)
