@@ -453,6 +453,7 @@ class DataCleaner:
             r"có\s+khả\s+năng\s+xây|"  # có khả năng xây 7
             r"móng(?:\s+cứng)?|"  # móng 7 tầng, móng cứng 8 tầng
             r"thiết\s+kế\s+lên\s+tới"  # thiết kế lên tới 5 tầng
+            r"xây\s+tối\s+đa\s" # xây tối đa 6 tầng
             r")\s*(\d+)",
             text
         )        # For filtering out potential numbers of a building, since we only care about actual number
