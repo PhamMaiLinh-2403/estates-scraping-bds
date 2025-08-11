@@ -109,12 +109,15 @@ class Scraper:
                 EC.presence_of_element_located((By.ID, 'product-detail-web'))
             )
             body = self.driver.find_element(By.ID, 'product-detail-web')
+            listing_info = self.driver.find_element(By.ID, '//*[@id="product-detail-web"]')
 
             coordinates = self._scrape_lat_long()
+            listing_id = listing_info.get_attribute("prid")
 
             listing_data = {
                 "url": url,
                 "title": self._get_text(self.driver, "h1.re__pr-title"),
+                "id": listing_id,
                 "latitude": coordinates.get("latitude"),
                 "longitude": coordinates.get("longitude"),
                 "short_address": self._get_text(self.driver, '.re__pr-short-description'),

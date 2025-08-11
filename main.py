@@ -36,6 +36,18 @@ def run_scrape_details():
     urls = pd.read_csv(config.URLS_OUTPUT_FILE)["url"].tolist()
     print(f"Loaded {len(urls)} URLs for detail‑scrape.")
 
+    # Load existing record IDs to prevent duplicates 
+    existing_ids = set()
+    if config.SCRAPING_DETAILS_CONFIG["append_mode"] and os.path.exists(config.DETAILS_OUTPUT_FILE):
+        try:
+            print(f"Loading existing data from {config.DETAILS_OUTPUT_FILE} to prevent duplicates...")
+            df_existing = pd.read_csv(config.DETAILS_OUTPUT_FILE, usecols=['id'], on_bad_lines='skip')
+            # Ensure IDs are strings for consistent comparison, handling cases where they might be read as floats
+            existing_ids = set(df_existing['id'].dropna().astype(str).str.replace(r'\.0$', '', regex=True))
+            print(f"Found {len(existing_ids)} existing listing IDs.")
+        except Exception as e:
+            print(f"Warning: Could not read existing details file to check for duplicates. Error: {e}")
+
     start = config.SCRAPING_DETAILS_CONFIG["start_index"]
     count = config.SCRAPING_DETAILS_CONFIG["count"]
     urls_to_scrape = urls[start: start + count] if count else urls[start:]

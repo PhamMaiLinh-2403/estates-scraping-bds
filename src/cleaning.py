@@ -197,7 +197,7 @@ class DataCleaner:
             return round(float(cleaned_num_str), 2)
         except (ValueError, TypeError):
             return None
-
+        
     # ----- Location extractors -----
     @staticmethod
     def extract_city(row: Dict[str, Any]) -> Optional[str]:

@@ -123,10 +123,12 @@ def predict_alley_width(df: pd.DataFrame) -> pd.DataFrame:
 
     df_to_predict = df[predict_mask]
     X_predict = df_to_predict[features].copy()
+
     for col in numeric_features:
         X_predict[col] = X_predict[col].fillna(X[col].median())
     for col in categorical_features:
         X_predict[col] = X_predict[col].astype(str).fillna('Missing')
+
     X_predict['Lợi thế kinh doanh'] = X_predict['Lợi thế kinh doanh'].map({'Tốt': 4, 'Khá': 3, 'Trung bình': 2, 'Kém': 1, 'Missing': 0})
     X_predict = pd.get_dummies(X_predict, columns=lgb_categorical)
     X_predict.columns = [sanitize_column_name(col) for col in X_predict.columns]
@@ -135,8 +137,10 @@ def predict_alley_width(df: pd.DataFrame) -> pd.DataFrame:
     train_cols = X_train.columns
     test_cols = X_predict.columns
     missing_in_test = set(train_cols) - set(test_cols)
+
     for c in missing_in_test:
         X_predict[c] = 0
+        
     extra_in_test = set(test_cols) - set(train_cols)
     X_predict = X_predict.drop(columns=list(extra_in_test))
     X_predict = X_predict[train_cols]
