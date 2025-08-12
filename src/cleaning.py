@@ -162,6 +162,7 @@ class DataCleaner:
             r'\d+\s*(m(2|²)|mét|m)?\b|'     
             r'\b(rộng|lớn|to|hẹp)\b|'  
             r'\b(tỷ|tầng|đẹp|nhỉnh|đắt|-|vip|ẩm thực)\b|'
+            r'\b(bê\s*tông|đất|đá|nhựa|kim loại)\b|'
             r'\b(ô\s*tô|oto)\b',
             re.IGNORECASE
         )
@@ -414,6 +415,29 @@ class DataCleaner:
 
     @staticmethod
     def extract_num_floors(row: Dict[str, Any]) -> Optional[int]:
+        floor_keywords = ["tầng", "lầu", "tấm", "mê"]
+
+        # Number words mapping
+        word_to_num = {
+            "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
+            "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
+            "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
+            "mười lăm": 15, "mười sáu": 16
+        }
+
+        # Extra partial floor components
+        extra_floor_terms = {
+            "trệt": 1,
+            "lửng": 1,
+            "gác": 1,
+            "gác lửng": 1,
+            "mái": 1,  # optional: only if counting roof as usable
+        }
+
+        # Patterns to ignore unrelated numbers
+        exclude_context = re.compile(r"\d+\s*(m|m2|mét|triệu|tỷ)\b")
+
+        # Try `other_info`
         try:
             other_info = json.loads(row.get("other_info", "{}") or "{}")
             if "Số tầng" in other_info:
@@ -423,6 +447,7 @@ class DataCleaner:
         except (json.JSONDecodeError, TypeError):
             pass
 
+        # Try `main_info`
         try:
             main_info = json.loads(row.get("main_info", "[]") or "[]")
             for item in main_info:
@@ -433,52 +458,75 @@ class DataCleaner:
         except (json.JSONDecodeError, TypeError):
             pass
 
+        # Search in text
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
         if not text:
             return 1
 
-        word_to_num = {
-            "một": 1, "hai": 2, "ba": 3,
-            "bốn": 4, "năm": 5, "sáu": 6,
-            "bảy": 7, "bẩy": 7, "tám": 8,
-            "chín": 9, "mười": 10,
-        }
-        num_words_pattern = "|".join(word_to_num.keys())
-        potential_numbers = re.findall(
-            r"(?:"
-            r"cải\s+tạo\s+lên|"  # cải tạo lên 4
-            r"xây\s+lên|"  # xây lên 3
-            r"nâng\s+tầng\s+lên|"  # nâng tầng lên 5
-            r"xin\s+phép\s+xây|"  # xin phép xây 6
-            r"có\s+thể\s+lên|"  # có thể lên 4
-            r"có\s+khả\s+năng\s+xây|"  # có khả năng xây 7
-            r"móng(?:\s+cứng)?|"  # móng 7 tầng, móng cứng 8 tầng
-            r"thiết\s+kế\s+lên\s+tới"  # thiết kế lên tới 5 tầng
-            r"xây\s+tối\s+đa\s" # xây tối đa 6 tầng
-            r")\s*(\d+)",
-            text
-        )        # For filtering out potential numbers of a building, since we only care about actual number
-        candidate_numbers: List[int] = []
+        # Numbers that are potential only (not actual)
+        potential_numbers = []
+        potential_pattern = re.compile(
+            r"(?:cải\s+tạo\s+lên|xây\s+lên|nâng\s+tầng\s+lên|"
+            r"xin\s+phép\s+xây|có\s+thể\s+lên|có\s+khả\s+năng\s+xây|"
+            r"móng(?:\s+cứng)?|thiết\s+kế\s+lên\s+tới|"
+            r"xây\s+tối\s+đa|dự\s+kiến\s+xây|xây\s+được|phép\s+xây\s+tối\s+đa)"
+            r"\s*(\d+)"
+        )
+        for m in potential_pattern.findall(text):
+            potential_numbers.append(int(m))
 
-        for num_str in re.findall(rf"(\d+|{num_words_pattern})\s*(?:tầng|lầu|tấm|mê)", text):
+        # Match "Gồm 5 tầng", "Tổng cộng 7 tầng"
+        explicit_total_pattern = re.compile(r"(?:gồm|tổng cộng|có tất cả)\s*(\d+)\s*(?:%s)" % "|".join(floor_keywords))
+        m_explicit = explicit_total_pattern.search(text)
+        
+        if m_explicit:
+            return int(m_explicit.group(1))
+
+        # Match numeric or word floors, skipping excluded contexts
+        candidate_numbers: List[int] = []
+        num_words_pattern = "|".join(sorted(word_to_num.keys(), key=lambda x: -len(x)))
+        floor_pattern = re.compile(rf"(\d+|{num_words_pattern})\s*(?:{'|'.join(floor_keywords)})")
+
+        for num_str in floor_pattern.findall(text):
+            if exclude_context.search(num_str):
+                continue
             if num_str.isdigit():
-                candidate_numbers.appe                   nd(int(num_str))
+                candidate_numbers.append(int(num_str))
             elif num_str in word_to_num:
                 candidate_numbers.append(word_to_num[num_str])
 
+        # Handle composite floor descriptions: "1 trệt 2 lầu"
+        composite_pattern = re.compile(r"(\d+)\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
+        total_from_composite = 0
+        found_composite = False
+
+        for count, term in composite_pattern.findall(text):
+            found_composite = True
+            num_val = int(count)
+            if term in extra_floor_terms or any(term == fk for fk in floor_keywords):
+                total_from_composite += num_val
+
+        if found_composite and total_from_composite > 0:
+            return total_from_composite
+
+        # Remove potentials from actuals
         actual = [n for n in candidate_numbers if n not in potential_numbers]
 
-        if "lầu" in text and any(k in text for k in ["trệt", "lửng", "gác mái"]):
-            extra = ("trệt" in text) + ("lửng" in text) + ("gác mái" in text)
+        # Adjust for "lầu + trệt/lửng/gác"
+        if any(extra in text for extra in extra_floor_terms.keys()):
+            extra_count = sum(extra in text for extra in extra_floor_terms.keys())
             if actual:
-                return max(actual) + extra
+                return max(actual) + extra_count
+
+        # Return best guess
         if actual:
             return max(actual)
         if not actual and candidate_numbers:
             return None
-        if "nhà cấp 4" in text or "nhà trệt" in text:
+        if any(x in text for x in ["nhà cấp 4", "nhà trệt"]):
             return 1
         return 1
+
 
     # ----- Construction & quality -----
     @staticmethod

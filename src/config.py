@@ -101,7 +101,7 @@ SHAPE_KEYWORDS = {
     'Chữ nhật vát góc': ['vát góc', 'cắt góc', 'bo góc', 'xéo góc'],
 
     # Specific letter shapes
-    'Chữ L': ['chữ l', 'hình l'],
+    'Chữ L': ['chữ l', 'hình l', "cong"],
     'Chữ L hẹp ngang': ['chữ l hẹp', 'hình l hẹp'],
     'Chữ L rộng ngang': ['chữ l rộng', 'hình l rộng'],
     'Chữ T': ['chữ t', 'hình t', 'thông ngang'],
@@ -197,9 +197,9 @@ STREET_PREFIXES = ("đường ", "phố ", "đại lộ ", "quốc lộ ", "vàn
 NON_STREET_KEYWORDS = (
     "phường", "xã", "dự án", "quận", "huyện", "thị trấn", 'khu'
     "số", "thôn", "xóm", "hẻm", "kiệt", "tổ", "khu phố", "ấp", "ngõ",
-    "khu đô thị", "khu nhà ở", "kdc", 'khu dân cư',
+    "khu đô thị", "khu nhà ở", "kdc", 'khu dân cư', "kđt"
 )
-DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án ')
+DETAIL_PREFIXES = ("số ", "ngõ ", "hẻm ", "kiệt ", "ngách ", "sn ", "hxh ", "no. ", 'dự án ', "số nhà ")
 
 NEGATION_PATTERNS = [
     r"không\s+{}",
