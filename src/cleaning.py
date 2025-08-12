@@ -655,9 +655,8 @@ class DataCleaner:
 
         # --- Step 4: Extract from "aa x bb m" patterns in description ---
         desc = str(row.get("description", "")).lower()
+        size_match = re.search(r"(diện\s+tích|dt|kích\s+thước)\s*[:\-]?\s*([\d.,]+)\s*m?(?:²)?\s*[xX*]\s*([\d.,]+)\s*m?(?:²)?", desc)
 
-        # Patterns: "diện tích 4 x 15", "dt: 5.5 x 12m", "DT 6 x 17 m²"
-        size_match = re.search(r"(diện\s+tích|dt|DT)[:\s]*([\d.,]+)\s*x\s*([\d.,]+)", desc)
         if size_match:
             num1 = DataCleaner._parse_and_clean_number(size_match.group(2))
             num2 = DataCleaner._parse_and_clean_number(size_match.group(3))
@@ -696,7 +695,7 @@ class DataCleaner:
             if m:
                 return DataCleaner._parse_and_clean_number(m.group(1))
 
-            m2 = re.search(r"(?:diện\s+tích|dt)[:\s]*([\d.,]+)\s*x\s*([\d.,]+)", text_l)
+            m2 = re.search(r"(diện\s+tích|dt|kích\s+thước)\s*[:\-]?\s*([\d.,]+)\s*m?(?:²)?\s*[xX*]\s*([\d.,]+)\s*m?(?:²)?", text_l)
             if m2:
                 num1 = DataCleaner._parse_and_clean_number(m2.group(1))
                 num2 = DataCleaner._parse_and_clean_number(m2.group(2))
@@ -795,10 +794,10 @@ class DataCleaner:
 
         # === 3. Descriptive fallback
         descriptive_fallback = [
-            ("hẻm thông thoáng", 2.5),
-            ("ngõ thông", 2.5),
-            ("hẻm thông", 2.5),
-            ("đường thông", 2.5),
+            ("ngõ thông", 5),
+            ("hẻm thông", 3),
+            ("ngõ hẹp", 2.5),
+            ("hẻm hẹp", 1.5),
         ]
 
         for kw, width in descriptive_fallback:
@@ -925,7 +924,10 @@ class DataCleaner:
 
             # Pattern 1: Look for "diện tích sàn" or "dt sàn" followed by a number.
             first_pattern = re.search(
-                pattern=r"(?:diện\s+tích\s+|dt\s+)?sàn(?:\s+\S+){0,5}?\s*:?\s*(\d+[.,]?\d*)\s*(?:m2|m²|m)\b",
+                pattern=(
+                    r"(?:diện\s+tích\s+(?:sàn|xây\s+dựng)|dt\s+(?:sàn|xây\s+dựng))"
+                    r"(?:\s+\S+){0,5}?\s*:?\s*(\d+[.,]?\d*)\s*(?:m2|m²|m)\b"
+                ),
                 string=des
             )
             if first_pattern:
@@ -936,7 +938,10 @@ class DataCleaner:
                     pass  # Fall through if conversion fails
 
             # Pattern 2: Look for "<area> m x <floors> T".
-            second_pattern = re.search(pattern=r'(\d+[.,]?\d*)\s*m\s*[*|x]\s*(\d+)\s*[T|t]', string=des)
+            second_pattern = re.search(
+                pattern=r'(\d+[.,]?\d*)\s*m\s*[*x]\s*(\d+)\s*(?:[Tt]|tầng|tang)\b',
+                string=des
+            )
             if second_pattern:
                 area_str = second_pattern.group(1).replace(',', '.')
                 floor_str = second_pattern.group(2)

@@ -161,7 +161,7 @@ def run_cleaning_pipeline():
     rows_after_drop = len(df_cleaned)
 
     if initial_rows > rows_after_drop:
-        print(f"  - Dropped {initial_rows - rows_after_drop} rows with missing 'Diện tích đất (m2)'.")
+        print(f"- Dropped {initial_rows - rows_after_drop} rows with missing 'Diện tích đất (m2)'.")
 
     # 2. Define helper functions for filling missing values
     def fill_length(row):
