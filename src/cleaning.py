@@ -68,13 +68,14 @@ def is_on_main_road(text: str) -> bool:
         r"(view|hướng\s+ra)\s+(phố|đường|mặt\s+phố)",
         r"\b\d{1,100}\s*m(?:ét)?\s*(tới|ra|cách)\s+(mặt\s+(phố|đường|tiền))",
         r"\bkhoảng\s*\d{1,100}\s*m\s*(đến|ra|tới|cách)\s+(mặt\s+(phố|đường|tiền))",
-        r"(gần|kế|bên cạnh)\s+(phố|đường|mặt\s+phố|mặt\s+tiền)",
+        r"(gần|kế|bên cạnh|kề)\s+(phố|đường|mặt\s+phố|mặt\s+tiền)",
         r"(cách|ra|gần|view|hướng\s+ra|đi\s+ra|đi\s+ra\s+đến)\s+(phố|đường|tiền)",
         r"(view|hướng\s+ra)\s+(phố|đường)",
         r"\b\d{1,100}\s*m(?:ét)?\s*(đến|tới|ra|cách)\s+(phố|đường|tiền)",
         r"\bkhoảng\s*\d{1,100}\s*m\s*(đến|ra|tới|cách)\s+(phố|đường|tiền)",
         r"(gần|kế|bên cạnh)\s+(phố|đường)",
-        r"\b\d{1,100}\s*m\s*(cách|ra|tới|đến)?\s*(phố|đường|tiền)"
+        r"\b\d{1,100}\s*m\s*(cách|ra|tới|đến)?\s*(phố|đường|tiền)",
+        r"(cách|ra|tới|đến)\s+(phố|đường(?:\s+lớn)?|mặt\s+(phố|đường|tiền))\s*\d{1,100}\s*m(?:ét)?"
     ]
 
     for pat in near_but_not_on_patterns:
@@ -83,7 +84,7 @@ def is_on_main_road(text: str) -> bool:
 
     # === 2. Positive indicators — property is ON a main road
     direct_main_road_patterns = [
-        r"(nhà|biệt thự|căn nhà|lô đất|đất|vị trí|nằm|tọa lạc|căn hộ|ở)?\s*(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
+        r"(nhà|biệt thự|căn nhà|lô đất|đất|đất nền|vị trí|nằm|tọa lạc|căn hộ|ở)?\s*(ngay\s+)?(mặt\s+(phố|tiền|đường)|mặt\s+tiền)",
         r"(nhà|biệt thự|căn nhà|vị trí|nằm|tọa lạc|căn hộ|ở)?\s*(ngay\s+)?trên\s+(phố|đường|đường\s+chính|phố\s+lớn)",
         r"(nằm|tọa lạc|ở)\s+(trên|tại)\s+trục\s+(đường|phố)\s+(chính|lớn)",
         r"(nhà|biệt thự|căn nhà|căn hộ)\s+phố"
@@ -461,7 +462,7 @@ class DataCleaner:
 
         for num_str in re.findall(rf"(\d+|{num_words_pattern})\s*(?:tầng|lầu|tấm|mê)", text):
             if num_str.isdigit():
-                candidate_numbers.append(int(num_str))
+                candidate_numbers.appe                   nd(int(num_str))
             elif num_str in word_to_num:
                 candidate_numbers.append(word_to_num[num_str])
 
@@ -782,11 +783,11 @@ class DataCleaner:
         # === 2. Regex Patterns
         # Allow these road keywords
         road_prefixes = [
-            r"đường\s+[a-z0-9/]+",  # e.g., đường 23/10, đường số 5
+            r"đường\s+[a-z0-9/]+",  
             r"phố\s+[a-z0-9/]+",
             r"trục\s+chính", r"đường\s+lớn", r"đường\s+chính",
-            r"đường\s+ô\s*tô", r"mặt\s+phố", r"mặt\s+tiền",
-            "ô tô đỗ", "chỗ đỗ xe"
+            r"đường\s+ô\s*tô", r"mặt\s+phố", r"mặt\s+tiền", r"mặt\s+đường",
+            "ô tô đỗ", "chỗ đỗ xe", "ô tô đậu"
         ]
         road_kw = f"(?:{'|'.join(road_prefixes)})"
 
@@ -799,14 +800,16 @@ class DataCleaner:
 
         # Main patterns
         patt1 = rf"{road_kw}.*?(cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}"
-        patt2 = rf"(cách|khoảng|tầm|tới|ra|đến)\s*{dist_cap}\s*(đến|tới|ra)?\s*{road_kw}"
+        patt2 = rf".*(?:cách|khoảng|tầm)\s*{dist_cap}\s*(đến|tới|ra)?\s*{road_kw}"
+        patt3 = rf"{dist_cap}\s*(?:đến|tới|ra|cách)?\s*{road_kw}"
+        patt4 = rf"(?:cách|ra|tới|đến)\s+{road_kw}\s*{dist_cap}"
 
-        matches = re.findall(patt1, text) + re.findall(patt2, text)
+        matches = re.findall(patt1, text) + re.findall(patt2, text) + re.findall(patt3, text) + re.findall(patt4, text)
         dists = []
 
         for match in matches:
             match_text = " ".join(str(m) for m in match)
-            if re.search(place_of_interest, match_text):  # Skip places like BigC, Vincom...
+            if re.search(place_of_interest, match_text):  
                 continue
             num, unit = match[-2], match[-1] or "m"
             converted = _convert(num, unit)
@@ -817,14 +820,18 @@ class DataCleaner:
             return min(dists)
 
         # === 3. Phrase-based inference
-        if re.search(r"(ngõ\s+nông|ngõ\s+rộng|ngõ\s+thoáng|ngõ\s+gần\s+đường)", text):
+        if re.search(
+            r"(ngõ\s+nông|ngõ\s+rộng|ngõ\s+thoáng|ngõ\s+gần\s+(đường|phố|mặt\s+(phố|đường))|hẻm\s+gần\s+(đường|phố|mặt\s+(phố|đường)))",
+            text):
             return 10.0
-        if re.search(r"(ngõ\s+xe\s+máy|ngõ\s+hẹp)", text):
+        if re.search(
+            r"(ngõ\s+hẹp|hẻm\s+hẹp|ngõ\s+xe\s+máy(?:\s+vào)?|hẻm\s+xe\s+máy(?:\s+vào)?)",
+            text):
             return 20.0
-        if re.search(r"(trong\s+ngõ|trong\s+hẻm)", text):
-            return 25.0
+        if re.search(r"(trong\s+hẻm\s+sâu|hẻm\s+sâu)", text):
+            return 30.0
 
-        return float(random.randint(10, 200))
+        return int(random.randint(10, 200))
 
     @staticmethod
     def extract_direct_features(row: Dict[str, Any]) -> List[str]:
