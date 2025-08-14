@@ -359,35 +359,64 @@ class DataCleaner:
     def extract_total_price(main_info_json: str) -> float:
         def _convert(price_str: str) -> float:
             price_str = price_str.lower().strip()
+            # Return NaN for non-numeric price phrases
+            if price_str in ["thỏa thuận", "liên hệ"]:
+                return np.nan
+
             num_part = re.search(r"([\d\.,]+)", price_str)
-
             if not num_part:
-                raise ValueError("No numeric part found in price string.")
+                raise ValueError(f"No numeric part found in price string: '{price_str}'")
 
-            # Use the robust cleaning function
             cleaned_num = DataCleaner._parse_and_clean_number(num_part.group(1))
             if cleaned_num is None:
-                raise ValueError("Could not parse number")
+                raise ValueError(f"Could not parse number from: '{price_str}'")
 
             if "tỷ" in price_str:
                 value = cleaned_num * 1e9
             elif "triệu" in price_str:
                 value = cleaned_num * 1e6
+            elif "nghìn" in price_str:
+                value = cleaned_num * 1e3
             else:
                 value = cleaned_num
             return round(value, 2)
-
+        
         if not isinstance(main_info_json, str):
             return np.nan
+        
         try:
-            for item in json.loads(main_info_json):
-                if item.get("title") == "Mức giá":
-                    value = item.get("value", "")
-                    if isinstance(value, str) and value.lower().strip() != "thỏa thuận":
-                        return _convert(value)
-        except (json.JSONDecodeError, ValueError, TypeError):
-            pass
-        return np.nan
+            data = json.loads(main_info_json)
+
+            # Case 1: Dict format
+            if isinstance(data, dict):
+                price = data.get("Mức giá")
+                if price and ("/m²" in price or "/m2" in price):
+                    return np.nan  
+                return _convert(price) 
+
+            # Case 2: List of dicts
+            elif isinstance(data, list):
+                for item in data:
+                    if item.get("title") == "Mức giá":
+                        ext_price = item.get("ext")
+                        value_price = item.get("value")
+
+                        # Prefer ext_price if it's total price
+                        if ext_price and not ("/m²" in ext_price or "/m2" in ext_price):
+                            return _convert(ext_price)
+
+                        # Fallback to value_price if it's total price
+                        if value_price and not ("/m²" in value_price or "/m2" in value_price):
+                            return _convert(value_price)
+
+            # If no usable price found
+            return np.nan
+
+        except json.JSONDecodeError:
+            return np.nan
+        except Exception as e:
+            print(f"Error parsing price: {e}")
+            return np.nan
 
     # ----- Physical dimensions & counts (facade, area, floors, …) -----
     @staticmethod
