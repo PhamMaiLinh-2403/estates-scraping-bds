@@ -123,7 +123,13 @@ def is_land_only(row: Dict[str, Any]) -> bool:
     Detects if a listing is for 'land only' based on simple keywords.
     Returns True if it's land only, otherwise False.
     """
-    text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+    address_parts = row.get("address_parts", [])
+    if isinstance(address_parts, list):
+        lowered_address_parts = [str(part).lower() for part in address_parts]
+        address_text = " ".join(lowered_address_parts)
+    else:
+        address_text = str(address_parts).lower()
+    text = f"{row.get('title', '')} {row.get('description', '')} {address_text}".lower()
     land_keywords = ["bán đất", "bán lô đất", "bán nền đất", "bán đất nền"]
 
     # Check if any of the land keywords are in the text
@@ -358,18 +364,11 @@ class DataCleaner:
     @staticmethod
     def extract_total_price(main_info_json: str) -> float:
         def _convert(price_str: str) -> float:
-            price_str = price_str.lower().strip()
-            # Return NaN for non-numeric price phrases
-            if price_str in ["thỏa thuận", "liên hệ"]:
-                return np.nan
-
             num_part = re.search(r"([\d\.,]+)", price_str)
-            if not num_part:
-                raise ValueError(f"No numeric part found in price string: '{price_str}'")
-
-            cleaned_num = DataCleaner._parse_and_clean_number(num_part.group(1))
-            if cleaned_num is None:
-                raise ValueError(f"Could not parse number from: '{price_str}'")
+            if num_part: 
+                cleaned_num = DataCleaner._parse_and_clean_number(num_part.group(1))
+                if cleaned_num is None:
+                    return price_str
 
             if "tỷ" in price_str:
                 value = cleaned_num * 1e9
@@ -391,6 +390,8 @@ class DataCleaner:
             if isinstance(data, dict):
                 price = data.get("Mức giá")
                 if price and ("/m²" in price or "/m2" in price):
+                    return np.nan
+                if isinstance(price, str) and ("thỏa thuận" in price.lower() or "liên hệ" in price.lower()):
                     return np.nan  
                 return _convert(price) 
 
@@ -401,12 +402,15 @@ class DataCleaner:
                         ext_price = item.get("ext")
                         value_price = item.get("value")
 
-                        # Prefer ext_price if it's total price
-                        if ext_price and not ("/m²" in ext_price or "/m2" in ext_price):
+                        if any(isinstance(text, str) and term in text.lower()
+                            for term in ["thỏa thuận", "liên hệ"]
+                            for text in [ext_price, value_price]):
+                            return np.nan
+
+                        if isinstance(ext_price, str) and not ("/m²" in ext_price or "/m2" in ext_price):
                             return _convert(ext_price)
 
-                        # Fallback to value_price if it's total price
-                        if value_price and not ("/m²" in value_price or "/m2" in value_price):
+                        if isinstance(value_price, str) and not ("/m²" in value_price or "/m2" in value_price):
                             return _convert(value_price)
 
             # If no usable price found
