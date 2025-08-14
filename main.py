@@ -243,6 +243,7 @@ def run_feature_engineering():
 
     initial_rows = len(df)
     df.dropna(subset=['Đơn giá đất'], inplace=True)
+    df = df[df["Giá rao bán/giao dịch"] >= 100_000_000]
     df.reset_index(drop=True, inplace=True)
 
     rows_after_drop = len(df)
