@@ -50,12 +50,11 @@ class Scraper:
         """Initializes the scraper with a Selenium WebDriver instance."""
         self.driver = driver
 
-    def scrape_listing_urls(self, search_page_url: str) -> list[str]:
+    def scrape_listing_urls(self, search_page_url: str, page_number: int) -> list[str]:
         """
         Scrapes all listing URLs from a search results page by iterating through page numbers in the URL.
         """
         urls = []
-        page_number = 1
 
         while True:
             # Construct URL for the current page
@@ -109,7 +108,7 @@ class Scraper:
                 EC.presence_of_element_located((By.ID, 'product-detail-web'))
             )
             body = self.driver.find_element(By.ID, 'product-detail-web')
-            listing_info = self.driver.find_element(By.ID, '//*[@id="product-detail-web"]')
+            listing_info = self.driver.find_element(By.XPATH, '//*[@id="product-detail-web"]')
 
             coordinates = self._scrape_lat_long()
             listing_id = listing_info.get_attribute("prid")

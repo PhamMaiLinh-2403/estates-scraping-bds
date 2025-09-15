@@ -22,7 +22,7 @@ def run_scrape_urls():
     """Step 1: Scrape listing URLs from search pages."""
     driver = create_stealth_driver(headless=config.SELENIUM_CONFIG["headless"])
     scraper = Scraper(driver)
-    urls = scraper.scrape_listing_urls(config.SEARCH_PAGE_URL)
+    urls = scraper.scrape_listing_urls(config.SEARCH_PAGE_URL, config.PAGE_NUMBER)
     save_urls_to_csv(urls, config.URLS_OUTPUT_FILE)
     driver.quit()
 
@@ -72,9 +72,9 @@ def run_scrape_details():
                 worker_details = fut.result()
                 if worker_details:
                     details_all.extend(worker_details)
-                print(f"[Worker {wid}]  ✔  {len(worker_details or [])} listings scraped.")
+                print(f"[Worker {wid}]: {len(worker_details or [])} listings scraped.")
             except Exception as exc:
-                print(f"[Worker {wid}]  ❌  raised {exc!r}")
+                print(f"[Worker {wid}]: raised {exc!r}")
     save_details_to_csv(details_all, config.DETAILS_OUTPUT_FILE)
 
 
