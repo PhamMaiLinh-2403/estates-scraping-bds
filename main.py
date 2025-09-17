@@ -1,6 +1,7 @@
 import argparse
 import os
 from datetime import date
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -36,13 +37,13 @@ def run_scrape_details():
     urls = pd.read_csv(config.URLS_OUTPUT_FILE)["url"].tolist()
     print(f"Loaded {len(urls)} URLs for detail‑scrape.")
 
-    # Load existing record IDs to prevent duplicates 
+    # Load existing record IDs to prevent duplicates
     existing_ids = set()
     if config.SCRAPING_DETAILS_CONFIG["append_mode"] and os.path.exists(config.DETAILS_OUTPUT_FILE):
         try:
             print(f"Loading existing data from {config.DETAILS_OUTPUT_FILE} to prevent duplicates...")
             df_existing = pd.read_csv(config.DETAILS_OUTPUT_FILE, usecols=['id'], on_bad_lines='skip')
-            # Ensure IDs are strings for consistent comparison, handling cases where they might be read as floats
+            # Normalize IDs for comparison
             existing_ids = set(df_existing['id'].dropna().astype(str).str.replace(r'\.0$', '', regex=True))
             print(f"Found {len(existing_ids)} existing listing IDs.")
         except Exception as e:
@@ -60,22 +61,48 @@ def run_scrape_details():
     url_chunks = list(chunks(urls_to_scrape, max_workers))
     print(f"Spawning {max_workers} workers (≈{[len(c) for c in url_chunks]} URLs per worker).")
     details_all = []
+    stop_event = threading.Event()
 
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {
-            pool.submit(scrape_worker, wid, subset): wid
-            for wid, subset in enumerate(url_chunks)
-        }
-        for fut in as_completed(futures):
-            wid = futures[fut]
-            try:
-                worker_details = fut.result()
-                if worker_details:
-                    details_all.extend(worker_details)
-                print(f"[Worker {wid}]: {len(worker_details or [])} listings scraped.")
-            except Exception as exc:
-                print(f"[Worker {wid}]: raised {exc!r}")
-    save_details_to_csv(details_all, config.DETAILS_OUTPUT_FILE)
+    try:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(scrape_worker, wid, subset, existing_ids, stop_event): wid
+                for wid, subset in enumerate(url_chunks)
+            }
+
+            for fut in as_completed(futures):
+                wid = futures[fut]
+                try:
+                    worker_details = fut.result()
+                    if worker_details:
+                        details_all.extend(worker_details)
+                    print(f"[Worker {wid}]: {len(worker_details or [])} listings scraped.")
+                except Exception as exc:
+                    print(f"[Worker {wid}]: raised {exc!r}")
+
+    except KeyboardInterrupt:
+        print("\n Scraping interrupted by user (Ctrl+C).")
+        print("Notifying all workers to shut down gracefully...")
+        stop_event.set()
+
+        for fut, wid in futures.items():
+            if fut.done():
+                try:
+                    worker_details = fut.result()
+                    if worker_details:
+                        details_all.extend(worker_details)
+                    print(f"[Worker {wid}]: (post-interrupt) {len(worker_details or [])} listings scraped.")
+                except Exception as exc:
+                    print(f"[Worker {wid}]: (post-interrupt) raised {exc!r}")
+            else:
+                print(f"[Worker {wid}]: still running — results not collected.")
+
+    finally:
+        if details_all:
+            save_details_to_csv(details_all, config.DETAILS_OUTPUT_FILE)
+            print(f"\nSaved {len(details_all)} listings before exit.")
+        else:
+            print("\nNo data collected to save.")
 
 
 def run_cleaning_pipeline():
