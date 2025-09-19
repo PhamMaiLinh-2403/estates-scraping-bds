@@ -22,12 +22,12 @@ SELENIUM_CONFIG = {
 }
 
 # Concurrency settings
-MAX_WORKERS = 5  # Number of parallel threads for scraping details
+MAX_WORKERS = 2  # Number of parallel threads for scraping details
 
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": True,
-    "start_index": 15000,
-    "count": 10000,
+    "start_index": 0,
+    "count": 5000,
     "stagger_mode": "random",
     "stagger_step_sec": 2.0,
     "stagger_max_sec": 3.0,
@@ -36,6 +36,7 @@ SCRAPING_DETAILS_CONFIG = {
 # Target-specific URLs
 BASE_URL = "https://batdongsan.com.vn"
 SEARCH_PAGE_URL = f"{BASE_URL}/ban-nha-rieng"
+PAGE_NUMBER = 1  # Starting page number for scraping
 
 # File path settings
 OUTPUT_DIR = "output"

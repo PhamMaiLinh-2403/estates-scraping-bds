@@ -9,17 +9,7 @@ import unicodedata
 import numpy as np
 import pandas as pd
 
-from src.config import (
-    CONSTRUCTION_COST_MAP,
-    DEFAULT_QUALITY,
-    FACADE_COUNT_MAP,
-    QUALITY_LEVELS,
-    SHAPE_KEYWORDS,
-    STREET_PREFIXES,
-    NON_STREET_KEYWORDS,
-    DETAIL_PREFIXES,
-    NEGATION_PATTERNS,
-)
+from src.config import *
 
 __all__ = [
     "DataCleaner",
@@ -968,7 +958,7 @@ class DataCleaner:
                 try:
                     return float(result_str)
                 except ValueError:
-                    pass  # Fall through if conversion fails
+                    pass  
 
             # Pattern 2: Look for "<area> m x <floors> T".
             second_pattern = re.search(
@@ -983,21 +973,5 @@ class DataCleaner:
                     floor = float(floor_str)
                     return area * floor
                 except ValueError:
-                    pass  # Fall through
-
-        # # --- Fallback method: Approximate from other columns ---
-        # land_area = row.get('Diện tích đất (m2)')
-        # num_floors = row.get('Số tầng công trình')
-
-        # # Ensure both values are available and valid before calculating
-        # if pd.notna(land_area) and pd.notna(num_floors):
-        #     try:
-        #         # Check for valid numeric types and that floors > 0
-        #         if isinstance(land_area, (int, float)) and isinstance(num_floors, (int, float)) and num_floors > 0:
-        #             return round(float(land_area * num_floors), 2)
-        #     except (ValueError, TypeError):
-        #         # This handles cases where values might be non-numeric strings
-        #         pass
-
-        # # If all methods fail, return None.
+                    pass  
         return None

@@ -1,11 +1,12 @@
 import time
 import random
+import threading
 from .selenium_manager import create_stealth_driver
 from .scraping import Scraper
 from . import config
 
 
-def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
+def scrape_worker(worker_id: int, url_subset: list[str], existing_ids: set[str], stop_event: threading.Event) -> list[dict]:
     """
     Defines the task for a single scraping worker.
     Each worker gets its own driver & scraper instance.
@@ -24,7 +25,12 @@ def scrape_worker(worker_id: int, url_subset: list[str]) -> list[dict]:
         data = scraper.scrape_listing_details(url)
 
         if data:
+            listing_id = str(data.get("id")).replace(".0", "")  # Normalize ID like before
+            if listing_id in existing_ids:
+                print(f"[Worker {worker_id}] Skipping already-scraped ID: {listing_id}")
+                continue
             results.append(data)
+
         if config.SCRAPING_DETAILS_CONFIG["stagger_mode"] == "random":
             delay = random.uniform(
                 config.SCRAPING_DETAILS_CONFIG["stagger_step_sec"],
