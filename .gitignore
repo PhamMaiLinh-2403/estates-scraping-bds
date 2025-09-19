@@ -97,3 +97,5 @@ screenshots/
 downloaded_files/
 # Ignore folder for output
 output/
+output_old/
+cleaned.xlsx
