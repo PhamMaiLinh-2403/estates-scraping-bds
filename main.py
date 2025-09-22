@@ -176,6 +176,7 @@ def run_cleaning_pipeline():
         )
         df_cleaned['Tỉnh/Thành phố'] = df_cleaned['Tỉnh/Thành phố'].apply(address_std.standardize_province)
         df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
+        df_cleaned
         print("Province and District standardization complete.")
     except FileNotFoundError:
         print("Skipping province/district standardization because data files were not found.")
