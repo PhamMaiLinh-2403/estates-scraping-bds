@@ -172,11 +172,13 @@ def run_cleaning_pipeline():
         # Standardize Province and District using the simplified AddressStandardizer
         address_std = AddressStandardizer(
             config.PROVINCES_SQL_FILE,
-            config.DISTRICTS_SQL_FILE
+            config.DISTRICTS_SQL_FILE,
+            config.WARDS_SQL_FILE,
+            config.STREETS_SQL_FILE
         )
         df_cleaned['Tỉnh/Thành phố'] = df_cleaned['Tỉnh/Thành phố'].apply(address_std.standardize_province)
-        df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
-        df_cleaned
+        # df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
+        df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned.apply(address_std.standardize_district, axis=1)
         print("Province and District standardization complete.")
     except FileNotFoundError:
         print("Skipping province/district standardization because data files were not found.")

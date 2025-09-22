@@ -50,6 +50,7 @@ ML_IMPUTED_OUTPUT_FILE = f"{OUTPUT_DIR}/ml_imputed_listings.xlsx"
 ADMIN_DATA_DIR = "Dữ liệu địa giới hành chính"
 PROVINCES_SQL_FILE = f"{ADMIN_DATA_DIR}/provinces_20250225_2.sql"
 DISTRICTS_SQL_FILE = f"{ADMIN_DATA_DIR}/districts_20250225_2.sql"
+WARDS_SQL_FILE = f"{ADMIN_DATA_DIR}/wards_20250225_2.sql"
 STREETS_SQL_FILE = f"{ADMIN_DATA_DIR}/streets_20250225_2.sql"
 
 # ML Training data path
