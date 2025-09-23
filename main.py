@@ -180,6 +180,7 @@ def run_cleaning_pipeline():
         df_cleaned['short_address'] = df_raw['short_address']
         # df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned['Thành phố/Quận/Huyện/Thị xã'].apply(address_std.standardize_district)
         df_cleaned['Thành phố/Quận/Huyện/Thị xã'] = df_cleaned.apply(address_std.standardize_district, axis=1)
+        df_cleaned['Xã/Phường/Thị trấn'] = df_cleaned.apply(address_std.standardize_ward, axis=1)
         df_cleaned.drop(columns=['short_address'], inplace=True)
         print("Province and District standardization complete.")
     except FileNotFoundError:
