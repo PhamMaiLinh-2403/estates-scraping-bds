@@ -2,6 +2,8 @@ import sqlite3
 import pandas as pd
 from typing import Optional
 from unicodedata import normalize
+from rapidfuzz import fuzz
+import re
 
 class AddressStandardizer:
     def __init__(self, provinces_sql_path: str, districts_sql_path: str, wards_sql_path: str, streets_sql_path: str):
@@ -99,15 +101,25 @@ class AddressStandardizer:
         for province in districts_df['province_name'].unique():
             self.reverse_district[province] = {}
             for district_name in districts_df[districts_df['province_name'] == province]['district_name'].unique():
-                district_name_strip = normalize('NFKD', district_name.replace('Thành phố ', '').replace('Thành Phố ', '').replace('Quận ', '').replace('Huyện ', '').replace('Thị xã ', '').replace('Thị Xã ', '').strip())
+                district_name_strip = district_name.replace('Thành phố ', '').replace('Thành Phố ', '').replace('Quận ', '').replace('Huyện ', '').replace('Thị xã ', '').replace('Thị Xã ', '').strip()
                 self.reverse_district[province][district_name_strip] = district_name
+        self.reverse_district['Tỉnh Bà Rịa - Vũng Tàu']['Long Đất'] = 'Huyện Long Đất'
+        self.reverse_district['Thành phố Hồ Chí Minh']['Quận 2'] = 'Thành phố Thủ Đức'
+        self.reverse_district['Thành phố Hồ Chí Minh']['Quận 9'] = 'Thành phố Thủ Đức'
 
         self.reverse_ward = {}
-        for district in wards_df['district_name'].unique():
-            self.reverse_ward[district] = {}
-            for ward_name in wards_df[wards_df['district_name'] == district]['ward_name'].unique():
-                ward_name_strip = normalize('NFKD', ward_name.replace('Xã ', '').replace('Phường ', '').replace('Thị trấn ', '').replace('Thị Trấn ', '').strip())
-                self.reverse_ward[district][ward_name_strip] = ward_name
+        for province in self.reverse_district.keys():
+            self.reverse_ward[province] = {}
+            for district in self.reverse_district[province].values():
+                self.reverse_ward[province][district] = {}
+                for ward in wards_df[wards_df['district_name'] == district]['ward_name'].unique():
+                    ward_name_strip = normalize('NFC', ward.replace('Xã ', '').replace('Phường ', '').replace('Thị trấn ', '').replace('Thị Trấn ', '').strip())
+                    self.reverse_ward[province][district][ward_name_strip] = ward
+        # for district in wards_df['district_name'].unique():
+        #     self.reverse_ward[district] = {}
+        #     for ward_name in wards_df[wards_df['district_name'] == district]['ward_name'].unique():
+        #         ward_name_strip = normalize('NFKD', ward_name.replace('Xã ', '').replace('Phường ', '').replace('Thị trấn ', '').replace('Thị Trấn ', '').strip())
+        #         self.reverse_ward[district][ward_name_strip] = ward_name
         # self.reverse_district_map = {
         #     dis.replace("Thành phố ", "").replace("Thành Phố ", "").replace("Huyện ", "")
         #        .replace("Quận ", "").replace("Thị xã ", ""): dis
@@ -121,33 +133,101 @@ class AddressStandardizer:
     def standardize_province(self, province_name: Optional[str]) -> Optional[str]:
         if not isinstance(province_name, str):
             return province_name
+        province_name = province_name.replace('.', '')
+        province_name = province_name.replace(',', '')
+        province_name = province_name.replace('?', '')
+        province_name = province_name.replace('!', '')
         return self.reverse_province_map.get(province_name, province_name)
 
     def standardize_district(self, row) -> Optional[str]:
-        if isinstance(row['Thành phố/Quận/Huyện/Thị xã'], str):
-            return row['Thành phố/Quận/Huyện/Thị xã']
-        short_add_list = row['short_address'].split(',')
-        if len(short_add_list) >= 3:
-            district_true = normalize('NFKD', short_add_list[-2].strip())
-            province = row['Tỉnh/Thành phố']
-            if province in self.reverse_district.keys():
-                # Add this line to see what the keys actually are
-                # print(f"Keys in reverse_district[{province}] are: {list(self.reverse_district[province].keys())}")
-                # print(f"The district_true value is: '{district_true}'")
-                if self.reverse_district[province][district_true]:
-                    # print(f'Return value: {self.reverse_district[province][district_true]}')
-                    return self.reverse_district[province][district_true]
-            return None
-    
-    def standardize_ward(self, row):
-        if isinstance(row['Xã/Phường/Thị trấn'], str):
-            return row['Xã/Phường/Thị trấn']
-        short_add_list = row['short_address'].split(',')
-        quanhuyen = row['Thành phố/Quận/Huyện/Thị xã']
-        ward_names = self.wards[self.wards['district_name'] == quanhuyen]['ward_name'].unique()
+            prefix = ['Thành phố', 'Thành Phố', 'Quận', 'Huyện', 'Thị xã', 'Thị Xã', 'Đảo']
+            district_value = row['Thành phố/Quận/Huyện/Thị xã']
 
-        if len(short_add_list) >= 4:
-            for ward in ward_names:
-                if short_add_list[-3] in ward:
-                    return ward
+            if isinstance(district_value, str):
+                if district_value == 'Quận 2' or district_value == 'Quận 9':
+                    return 'Thành phố Thủ Đức'
+                for pre in prefix:
+                    if district_value.startswith(pre):
+                        return district_value
+                province = row['Tỉnh/Thành phố']
+                if district_value in self.reverse_district[province].keys():
+                    return self.reverse_district[province][district_value]
+                for dis in self.reverse_district[province].keys():
+                    similarity = fuzz.ratio(district_value, dis)
+                    if similarity >= 66:
+                        return self.reverse_district[province][dis]
+                return None
+            return None
+                # short_add_list = row['short_address'].split(',')
+                # if len(short_add_list) >= 3:
+                #     for pre in prefix:
+                #         if pre in short_add_list[-2]:
+                #             return short_add_list[-2]
+                #     district_true = normalize('NFKD', short_add_list[-2].strip())
+                #     province = row['Tỉnh/Thành phố']
+                #     if province in reverse_district.keys():
+                #         # Add this line to see what the keys actually are
+                #         # print(f"Keys in reverse_district[{province}] are: {list(self.reverse_district[province].keys())}")
+                #         # print(f"The district_true value is: '{district_true}'")
+                #         if reverse_district[province][district_true]:
+                #             # print(f'Return value: {self.reverse_district[province][district_true]}')
+                #             return reverse_district[province][district_true]
+
+    def standardize_ward(self, row):
+        ward_value = row['Xã/Phường/Thị trấn']
+
+        def matching(ward_value, district_value, province_value):
+            # Function to match values with its corresponding prefixes
+            if ward_value in self.reverse_ward[province_value][district_value].keys():
+                return self.reverse_ward[province_value][district_value][ward_value]
+            for ward in self.reverse_ward[province_value][district_value].keys():
+                similarity = fuzz.ratio(ward_value, ward)
+                if similarity >= 66:
+                    return self.reverse_ward[province_value][district_value][ward]
+            return None
+                
+        if ward_value:
+            prefix = ['Xã', 'Phường', 'Thị trấn', 'Thị Trấn']
+            for pre in prefix:
+                if ward_value.startswith(pre):
+                    return ward_value
+            ward_value = normalize('NFC', ward_value)
+            district_value = row['Thành phố/Quận/Huyện/Thị xã']
+            province_value = row['Tỉnh/Thành phố']
+            return matching(ward_value, district_value, province_value)
+        else:
+            short_add = row['short_address']
+            if isinstance(short_add, str) and short_add != '':
+                if 'xã' in short_add.lower():
+                    match_result = re.search(pattern='(xã [\w\s]+)', string=short_add.lower())
+                    if match_result:
+                        match_result = match_result[0]
+                        result_split = match_result.split()
+                        result = ' '.join(i.capitalize() for i in result_split)
+                        return result
+                elif 'phường' in short_add.lower():
+                    match_result = re.search(pattern='(phường [\w\s]+)', string=short_add.lower())
+                    if match_result:
+                        match_result = match_result[0]
+                        result_split = match_result.split()
+                        result = ' '.join(i.capitalize() for i in result_split)
+                        return result
+                elif 'thị trấn' in short_add.lower():
+                    match_result = re.search(pattern='(thị trấn [\w\s]+)', string=short_add.lower())
+                    if match_result:
+                        match_result = match_result[0]
+                        result_split = match_result.split()
+                        result = ' '.join(i.capitalize() for i in result_split)
+                        return result
+                else:
+                    short_add_list = row['short_address'].split(',')
+                    if len(short_add_list) >= 3:
+                        new_province_val = row['Tỉnh/Thành phố']
+                        new_ward_val = normalize('NFC',short_add_list[-3].strip())
+                        new_district_val = row['Thành phố/Quận/Huyện/Thị xã']
+                        return matching(new_ward_val, new_district_val, new_province_val)
+
+            else:
+                return None
         return None
+            
