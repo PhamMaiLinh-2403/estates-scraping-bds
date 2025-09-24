@@ -749,15 +749,13 @@ class DataCleaner:
         text = f"{row.get('title', '')} {row.get('description', '')}"
         norm_text = unicodedata.normalize('NFC', text.lower())
 
-        # === 0. Explicitly on the main road
-        if is_on_main_road(norm_text):
-            return 0.0
-
         try:
             other_info_json = row.get("other_info", "{}") or "{}"
             val = json.loads(other_info_json).get("Đường vào")
             w = parse_and_clean_width(val)
-            return w if w and w < 15 else None
+            if w:
+                return w
+            # return w if w and w < 15 else None
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -826,6 +824,10 @@ class DataCleaner:
         for kw, width in descriptive_fallback:
             if unicodedata.normalize('NFC', kw.lower()) in norm_text:
                 return width if width < 15 else None
+            
+        # === 0. Explicitly on the main road
+        if is_on_main_road(norm_text):
+            return 0.0
 
         return None
 
