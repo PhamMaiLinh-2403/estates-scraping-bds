@@ -188,7 +188,7 @@ def run_cleaning_pipeline():
 
     df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(DataCleaner.validate_and_format_street_name)
 
-    # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential.
+    # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential. The missing value might be written as empty strings.
     initial_rows = len(df_cleaned)
     df_cleaned = df_cleaned.dropna(subset=['Diện tích đất (m2)']).reset_index(drop=True)
     rows_after_drop = len(df_cleaned)

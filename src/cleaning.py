@@ -462,24 +462,28 @@ class DataCleaner:
 
         # Try `other_info`
         try:
-            other_info = json.loads(row.get("other_info", "{}") or "{}")
-            if "Số tầng" in other_info:
+            other_info = json.loads(row.get("other_info", "{}") or "{}") # Extract other_info if it exists
+            if other_info != {} and "Số tầng" in other_info.keys():
+            #     num_floor = other_info['Số tầng']
+            #     if num_floor != '' and num_floor is not None:
+            #         num_floor = num_floor.split()[0]
+            #         return int(num_floor)
                 m = re.search(r"\d+", str(other_info["Số tầng"]))
                 if m:
                     return int(m.group(0))
         except (json.JSONDecodeError, TypeError):
             pass
 
-        # Try `main_info`
-        try:
-            main_info = json.loads(row.get("main_info", "[]") or "[]")
-            for item in main_info:
-                if item.get("title") == "Số tầng":
-                    m = re.search(r"\d+", str(item["value"]))
-                    if m:
-                        return int(m.group(0))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        # # Try `main_info`
+        # try:
+        #     main_info = json.loads(row.get("main_info", "[]") or "[]")
+        #     for item in main_info:
+        #         if item.get("title") == "Số tầng":
+        #             m = re.search(r"\d+", str(item["value"]))
+        #             if m:
+        #                 return int(m.group(0))
+        # except (json.JSONDecodeError, TypeError):
+        #     pass
 
         # Search in text
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
@@ -519,14 +523,24 @@ class DataCleaner:
                 candidate_numbers.append(word_to_num[num_str])
 
         # Handle composite floor descriptions: "1 trệt 2 lầu"
-        composite_pattern = re.compile(r"(\d+)\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
+        # composite_pattern = re.compile(r"(\d+)\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
+        composite_pattern = re.compile(rf"(\d+|{num_words_pattern})\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
         total_from_composite = 0
         found_composite = False
 
         for count, term in composite_pattern.findall(text):
             found_composite = True
-            num_val = int(count)
-            if term in extra_floor_terms or any(term == fk for fk in floor_keywords):
+
+            # Addition
+            if count.isdigit():
+                num_val = int(count)
+            else:
+                num_val = word_to_num.get(count)
+            # End addition
+
+            # num_val = int(count)
+            # if term in extra_floor_terms or any(term == fk for fk in floor_keywords):
+            if term in extra_floor_terms or term in floor_keywords:
                 total_from_composite += num_val
 
         if found_composite and total_from_composite > 0:
