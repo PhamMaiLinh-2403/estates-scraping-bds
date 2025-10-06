@@ -163,18 +163,9 @@ QUALITY_LEVELS = [
         'đất nền', 'nhà tạm', 'chủ yếu lấy đất', 'tặng nhà'
         'có nhà nhưng không đáng giá', 'không tính giá trị nhà',
         'nhà cấp 4 cũ', 'nhà xuống cấp', 'giá trị đất là chính',
+        'bán đất'
     ]),
-
-    # Priority 2: Brand-new condition (100%)
-    (1.0, [
-        'mới xây', 'mới hoàn thiện', 'mới 100%', 'nhà mới keng',
-        'vừa xây xong', 'mới bàn giao', 'mới nhận nhà',
-        'chưa ở lần nào', 'nhà mới tinh', 'nhà mới toanh',
-        'nhà xây mới', 'vừa hoàn thiện', 'còn thơm mùi sơn',
-        'mới hoàn công', 'nhà xây kiên cố', 'đảm bảo kết cấu mới',
-    ]),
-
-    # Priority 3: Old or needs significant repair (50%)
+    # Priority 2: Old or needs significant repair (50%)
     (0.5, [
         'nhà cũ', 'nhà nát', 'cần sửa chữa', 'tiện xây mới',
         'xây lâu năm', 'xuống cấp', 'cũ nhưng ở tạm được',
@@ -182,15 +173,22 @@ QUALITY_LEVELS = [
         'nền móng yếu', 'sắp sập', 'cần xây lại',
         'nhà cấp 4 cũ kỹ', 'không có giá trị sử dụng',
     ]),
-
-    # Priority 4: Good, well-maintained condition (85%)
+    # Priority 3: Good, well-maintained condition (85%)
     (0.85, [
         'nhà đẹp', 'còn mới', 'giữ gìn', 'full nội thất', 'thiết kế hiện đại',
         'nhà sạch sẽ', 'ở ngay', 'nhà gọn gàng', 'nội thất cao cấp',
-        'không cần sửa', 'nhà rất mới', 'đẹp như hình', 'vào ở liền',
+        'không cần sửa', 'đẹp như hình', 'vào ở liền',
         'nội thất đầy đủ', 'tiện nghi', 'nhà không lỗi phong thủy',
-        'còn bảo hành', 'nhà chất lượng tốt',
+        'còn bảo hành', 'nhà chất lượng tốt', 'nhà chắc chắn'
     ]),
+    # Priority 4: Brand-new condition (100%)
+    (1.0, [
+        'mới xây', 'mới hoàn thiện', 'mới 100%', 'mới keng',
+        'vừa xây xong', 'mới bàn giao', 'mới nhận nhà', 'nhà rất mới',
+        'chưa ở lần nào', 'nhà mới tinh', 'nhà mới toanh',
+        'nhà xây mới', 'vừa hoàn thiện', 'còn thơm mùi sơn',
+        'mới hoàn công', 'nhà xây kiên cố', 'đảm bảo kết cấu mới',
+    ]),   
 ]
 
 DEFAULT_QUALITY = 0.75

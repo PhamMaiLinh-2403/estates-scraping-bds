@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List, Optional
 import random
 import unicodedata
+from rapidfuzz import fuzz
 
 import numpy as np
 import pandas as pd
@@ -623,13 +624,33 @@ class DataCleaner:
     @staticmethod
     def estimate_remaining_quality(row: Dict[str, Any]) -> float:
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+        result = {}
 
         for quality_val, keywords in QUALITY_LEVELS:
             for kw in keywords:
-                if re.search(rf"\b{re.escape(kw)}\b", text):
-                    return round(quality_val, 2)
+                pattern = kw.replace(' ', '(?:\s*\w+\s*){0,2} ')
+                pattern = pattern.strip()
+                pattern = '\W' + pattern + '\W'
+                qual = re.search(pattern, text)
 
-        return round(DEFAULT_QUALITY, 2)
+                if qual:
+                    ratio = fuzz.ratio(qual[0], kw)
+                    if quality_val == 0 or quality_val == 1:
+                        ratio += 3
+                    result[quality_val] = [qual.group(0), ratio]
+        
+        if result:
+            best_quality, (match, score) = max(result.items(), key=lambda x: (x[1][1], x[0]))
+            return best_quality
+        else:
+            return DEFAULT_QUALITY
+
+        # for quality_val, keywords in QUALITY_LEVELS:
+        #     for kw in keywords:
+        #         if re.search(rf"\b{re.escape(kw)}\b", text):
+        #             return round(quality_val, 2)
+
+        # return round(DEFAULT_QUALITY, 2)
 
     # ----- Land morphology & frontage -----
     @staticmethod
