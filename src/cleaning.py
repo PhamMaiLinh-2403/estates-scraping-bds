@@ -590,7 +590,7 @@ class DataCleaner:
         if row.get('is_land', False):
             return 0
         
-        # Primary signals
+        # Primary signals0
         ptype = _prop_type()
         floors = DataCleaner.extract_num_floors(row)
         area = DataCleaner.extract_total_area(row)
