@@ -1195,7 +1195,7 @@ class DataCleaner:
         if re.search(r"(trong\s+hẻm\s+sâu|hẻm\s+sâu)", text):
             return 30.0
 
-        return int(random.randint(10, 200))
+        return None# int(random.randint(10, 200))
 
     @staticmethod
     def extract_direct_features(row: Dict[str, Any]) -> List[str]:
