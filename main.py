@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import numpy as np
+import json
 
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
@@ -114,6 +115,7 @@ def run_cleaning_pipeline():
     print(f"Reading raw data from '{config.DETAILS_OUTPUT_FILE}'...")
     df_raw = pd.read_csv(config.DETAILS_OUTPUT_FILE)
     df_raw = drop_mixed_listings(df_raw)
+    df_raw['other_info'] = df_raw['other_info'].apply(json.loads)
 
     cleaned_records = []
     for _, row in df_raw.iterrows():

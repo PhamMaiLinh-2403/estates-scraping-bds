@@ -526,132 +526,301 @@ class DataCleaner:
         return np.nan
 
     @staticmethod
-    def extract_num_floors(row: Dict[str, Any]) -> Optional[int]:
-        floor_keywords = ["tầng", "lầu", "tấm", "mê"]
+    def extract_num_floors(row):
+        def new_check_additional_floor(string, additional_floor):
+            result = 0
+            for word in additional_floor:
+                if word in string:
+                    result += 1
+            search_st = re.search(pattern=r'(\Wst\W)', string=string)
+            if search_st:
+                result += 1
+            search_gl = re.search(pattern=r'gác lửng|gác lững|ghác lửng|ghác lững', string=string)
+            if search_gl:
+                result -= 1
+            return result 
 
-        # Number words mapping
-        word_to_num = {
-            "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
-            "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
-            "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
-            "mười lăm": 15, "mười sáu": 16
-        }
+        def is_float(num):
+            try:
+                float(num)
+                return True
+            except:
+                return False
 
-        # Extra partial floor components
-        extra_floor_terms = {
-            "trệt": 1,
-            "lửng": 1,
-            "gác": 1,
-            "gác lửng": 1,
-            "mái": 1,  # optional: only if counting roof as usable
-        }
-
-        # Patterns to ignore unrelated numbers
-        exclude_context = re.compile(r"\d+\s*(m|m2|mét|triệu|tỷ)\b")
-
-        # Try `other_info`
-        try:
-            other_info = json.loads(row.get("other_info", "{}") or "{}") # Extract other_info if it exists
-            if other_info != {} and "Số tầng" in other_info.keys():
-            #     num_floor = other_info['Số tầng']
-            #     if num_floor != '' and num_floor is not None:
-            #         num_floor = num_floor.split()[0]
-            #         return int(num_floor)
-                m = re.search(r"\d+", str(other_info["Số tầng"]))
-                if m:
-                    return int(m.group(0))
-        except (json.JSONDecodeError, TypeError):
-            pass
-
-        # # Try `main_info`
-        # try:
-        #     main_info = json.loads(row.get("main_info", "[]") or "[]")
-        #     for item in main_info:
-        #         if item.get("title") == "Số tầng":
-        #             m = re.search(r"\d+", str(item["value"]))
-        #             if m:
-        #                 return int(m.group(0))
-        # except (json.JSONDecodeError, TypeError):
-        #     pass
-
-        # Search in text
-        text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        if not text:
-            return 1
-
-        # Numbers that are potential only (not actual)
-        potential_numbers = []
-        potential_pattern = re.compile(
-            r"(?:cải\s+tạo\s+lên|xây\s+lên|nâng\s+tầng\s+lên|"
-            r"xin\s+phép\s+xây|có\s+thể\s+lên|có\s+khả\s+năng\s+xây|"
-            r"móng(?:\s+cứng)?|thiết\s+kế\s+lên\s+tới|"
-            r"xây\s+tối\s+đa|dự\s+kiến\s+xây|xây\s+được|phép\s+xây\s+tối\s+đa)"
-            r"\s*(\d+)"
-        )
-        for m in potential_pattern.findall(text):
-            potential_numbers.append(int(m))
-
-        # Match "Gồm 5 tầng", "Tổng cộng 7 tầng"
-        explicit_total_pattern = re.compile(r"(?:gồm|tổng cộng|có tất cả)\s*(\d+)\s*(?:%s)" % "|".join(floor_keywords))
-        m_explicit = explicit_total_pattern.search(text)
-        
-        if m_explicit:
-            return int(m_explicit.group(1))
-
-        # Match numeric or word floors, skipping excluded contexts
-        candidate_numbers: List[int] = []
-        num_words_pattern = "|".join(sorted(word_to_num.keys(), key=lambda x: -len(x)))
-        floor_pattern = re.compile(rf"(\d+|{num_words_pattern})\s*(?:{'|'.join(floor_keywords)})")
-
-        for num_str in floor_pattern.findall(text):
-            if exclude_context.search(num_str):
-                continue
-            if num_str.isdigit():
-                candidate_numbers.append(int(num_str))
-            elif num_str in word_to_num:
-                candidate_numbers.append(word_to_num[num_str])
-
-        # Handle composite floor descriptions: "1 trệt 2 lầu"
-        # composite_pattern = re.compile(r"(\d+)\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
-        composite_pattern = re.compile(rf"(\d+|{num_words_pattern})\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
-        total_from_composite = 0
-        found_composite = False
-
-        for count, term in composite_pattern.findall(text):
-            found_composite = True
-
-            # Addition
-            if count.isdigit():
-                num_val = int(count)
-            else:
-                num_val = word_to_num.get(count)
-            # End addition
-
-            # num_val = int(count)
-            # if term in extra_floor_terms or any(term == fk for fk in floor_keywords):
-            if term in extra_floor_terms or term in floor_keywords:
-                total_from_composite += num_val
-
-        if found_composite and total_from_composite > 0:
-            return total_from_composite
-
-        # Remove potentials from actuals
-        actual = [n for n in candidate_numbers if n not in potential_numbers]
-
-        # Adjust for "lầu + trệt/lửng/gác"
-        if any(extra in text for extra in extra_floor_terms.keys()):
-            extra_count = sum(extra in text for extra in extra_floor_terms.keys())
-            if actual:
-                return max(actual) + extra_count
-
-        # Return best guess
-        if actual:
-            return max(actual)
-        if not actual and candidate_numbers:
+        def extract_separate(lower_value, floor_keywords):
+            value_list = lower_value.split()
+            forbidden_pattern = r'giấy phép xây dựng|giấy phép xây|phép xây dựng|gpxd|có thể xây|cải tạo|được phép xây'
+            additional_floor = ['sân thượng', 'sân thương', 'trêt', 'trệt', 'tret', 'tum', 'hầm', 'hâm', 'gác', 'gac', 'lửng', 'lững', 'lừng']
+            if 'trệt' in floor_keywords:
+                additional_floor = ['sân thượng', 'sân thương',  'tum', 'hầm', 'hâm', 'gác', 'gac', 'lửng', 'lững', 'lừng']
+            word_to_num = {
+                    "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
+                    "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
+                    "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
+                    "mười lăm": 15, "mười sáu": 16
+                }
+            for keyword in floor_keywords: # Check cho từng chiếc keyword
+                if keyword in lower_value: # Nếu trong string có một trong những chiếc keyword
+                    i = 0
+                    while i < len(value_list):
+                        # for value in value_list: # Tìm trong list string mà đã được tách ra sẵn
+                    #     if keyword in value: # Nếu chiếc keyword đã tìm thấy ban nãy là của từ này
+                            # word_index = value_list.index(value) # Lấy index của từ
+                        if keyword in value_list[i]: # Tìm index của chiếc từ keyword floor 
+                            # Trong trường hợp mà nó bị dính chữ vào với nhau
+                            extracted_floor = value_list[i].replace(keyword, '').replace(',','.')
+                            if is_float(extracted_floor) or (extracted_floor in word_to_num.keys()): 
+                                word_lower = i - 4 if i - 4 >= 0 else 0
+                                word_upper = i + 4 if i + 4 < len(value_list) else len(value_list) - 1
+                                search_range = ' '.join(value_list[word_lower:word_upper + 1]) # Tìm trong khoảng 5 từ trước - sau của từ
+                                forbidden_word = re.search(pattern=forbidden_pattern, string=search_range)
+                                if forbidden_word: # Nếu xuất hiện forbidden word
+                                    i += 1
+                                else:
+                                    # if 'hiện trạng' in ' '.join(value_list[word_lower:i]): # Nếu hiện trạng 3 tầng --> return luôn
+                                    #     if is_float(extracted_floor):
+                                    #         return abs(float(extracted_floor))
+                                    #     if extracted_floor in word_to_num.keys():
+                                    #         return word_to_num[extracted_floor]
+                                    # else:
+                                    if is_float(extracted_floor) or (extracted_floor in word_to_num.keys()):
+                                        add_key = new_check_additional_floor(search_range, additional_floor)
+                                        if is_float(extracted_floor):
+                                            return abs(float(extracted_floor)) + add_key
+                                        return word_to_num[extracted_floor] + add_key
+                                    else:
+                                        add_key = new_check_additional_floor(search_range, additional_floor)
+                                        if add_key > 0:
+                                            return add_key + 1
+                                        else:
+                                            i += 1
+                            # Nếu có thể extract vị trí ở đằng trước keyword đã cho
+                            elif i - 1 >= 0:
+                                extracted_floor = value_list[i - 1].replace(',', '.')
+                                word_lower = i - 4 if i - 4 >= 0 else 0
+                                word_upper = i + 4 if i + 4 < len(value_list) else len(value_list) - 1
+                                search_range = ' '.join(value_list[word_lower:word_upper + 1]) # Tìm trong khoảng 5 từ trước - sau của từ
+                                forbidden_word = re.search(pattern=forbidden_pattern, string=search_range)
+                                if forbidden_word: # Nếu xuất hiện forbidden word
+                                    i += 1
+                                else:
+                                    if 'hiện trạng' in ' '.join(value_list[word_lower:i]): # Nếu hiện trạng 3 tầng --> return luôn
+                                        if is_float(extracted_floor):
+                                            return abs(float(extracted_floor))
+                                        elif extracted_floor in word_to_num.keys():
+                                            return word_to_num[extracted_floor]
+                                        else:
+                                            i += 1
+                                    else:
+                                        if is_float(extracted_floor) or (extracted_floor in word_to_num.keys()):
+                                            add_key = new_check_additional_floor(search_range, additional_floor)
+                                            if is_float(extracted_floor):
+                                                return abs(float(extracted_floor)) + add_key
+                                            return word_to_num[extracted_floor] + add_key
+                                        else:
+                                            add_key = new_check_additional_floor(search_range, additional_floor)
+                                            if add_key > 0:
+                                                return add_key + 1
+                                            else:
+                                                i += 1
+                            else:
+                                i += 1
+                        else:
+                            i += 1
+            
             return None
-        if any(x in text for x in ["nhà cấp 4", "nhà trệt"]):
-            return 1
-        return 1
+        
+        floor_keywords = ['tầng', 'lầu', 'tấm', 'mê']
+        word_to_num = {
+                "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
+                "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
+                "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
+                "mười lăm": 15, "mười sáu": 16
+            }
+        # ------- TH1: Thông tin đã có sẵn ở other_info ------
+        if row['other_info'] != {} and row['other_info'].get('Số tầng'):
+            return int(row['other_info'].get('Số tầng').split()[0])
+        # ------ TH2: Nhà cũ/nhà cấp 4 ở title/description ------
+        # Xét của description trước do description thường được viết đầy đủ hơn
+        if pd.notna(row['description']):
+            lower_des = row['description'].lower().replace('+', ' ').replace('x',' ').replace('*', ' ')
+            old_house = re.search(pattern=r'nhà (?:\w+\s*){0,5}cũ|bán(?:\s+\S\s*){0,5}đất', string=lower_des)
+            if old_house:
+                return 0
+            cap4 = re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4|nc4|nhà trệt|nhà nát', string=lower_des)
+            if cap4:
+                if cap4.group(0) == 'nhà trệt':
+                    extract_result = extract_separate(lower_des, floor_keywords)
+                    if extract_result:
+                        return extract_result
+                return 1
+        if pd.notna(row['title']):
+            lower_title = row['title'].lower().replace('+', ' ').replace('x',' ').replace('*', ' ')
+            old_house = re.search(pattern=r'nhà (?:\w+\s*){0,5}cũ|bán(?:\s+\S\s*){0,5}đất', string=lower_title)
+            if old_house:
+                return 0
+            cap4 = re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4|nc4|nhà trệt|nhà nát', string=lower_title)
+            if cap4:
+                if cap4.group(0) == 'nhà trệt':
+                    extract_result = extract_separate(lower_title, floor_keywords)
+                    if extract_result:
+                        return extract_result
+                return 1
+        # ------ TH3: Xét tổng số tầng ------
+            extract_result = extract_separate(lower_title, floor_keywords)
+            if extract_result:
+                return extract_result
+        if pd.notna(row['description']):
+            # Trong trường hợp nêu rõ tầng 1, tầng 2,... thì max sẽ là tổng số tầng
+            total_pattern = re.findall(pattern=r'(?:tầng|lầu|tấm|mê)\s* ([\d\w]+):', string=lower_des)
+            if total_pattern:
+                total_floor_num = []
+                for digit in total_pattern:
+                    if is_float(digit):
+                        total_floor_num.append(abs(float(digit)))
+                    elif digit in word_to_num.keys():
+                        total_floor_num.append(word_to_num[digit])
+                if total_floor_num:
+                    return max(total_floor_num)
+        #------TH4: Xét số tầng mà có miêu tả cấu trúc cụ thể (Kiểu như trệt 2 lầu)------
+            else:
+                extract_result = extract_separate(lower_des, floor_keywords)
+                if extract_result:
+                    return extract_result
+                else:
+                    extract_result = extract_separate(lower_des, ['trệt', 'trêt', 'tret'])
+                    if extract_result:
+                        return extract_result  
+                    extract_result = extract_separate(lower_title, ['trệt', 'trêt', 'tret'])     
+                    if extract_result:
+                        return extract_result      
+        return 1    
+    # def extract_num_floors(row: Dict[str, Any]) -> Optional[int]:
+    #     floor_keywords = ["tầng", "lầu", "tấm", "mê"]
+
+    #     # Number words mapping
+    #     word_to_num = {
+    #         "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
+    #         "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
+    #         "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
+    #         "mười lăm": 15, "mười sáu": 16
+    #     }
+
+    #     # Extra partial floor components
+    #     extra_floor_terms = {
+    #         "trệt": 1,
+    #         "lửng": 1,
+    #         "gác": 1,
+    #         "gác lửng": 1,
+    #         "mái": 1,  # optional: only if counting roof as usable
+    #     }
+
+    #     # Patterns to ignore unrelated numbers
+    #     exclude_context = re.compile(r"\d+\s*(m|m2|mét|triệu|tỷ)\b")
+
+    #     # Try `other_info`
+    #     try:
+    #         other_info = json.loads(row.get("other_info", "{}") or "{}") # Extract other_info if it exists
+    #         if other_info != {} and "Số tầng" in other_info.keys():
+    #         #     num_floor = other_info['Số tầng']
+    #         #     if num_floor != '' and num_floor is not None:
+    #         #         num_floor = num_floor.split()[0]
+    #         #         return int(num_floor)
+    #             m = re.search(r"\d+", str(other_info["Số tầng"]))
+    #             if m:
+    #                 return int(m.group(0))
+    #     except (json.JSONDecodeError, TypeError):
+    #         pass
+
+    #     # # Try `main_info`
+    #     # try:
+    #     #     main_info = json.loads(row.get("main_info", "[]") or "[]")
+    #     #     for item in main_info:
+    #     #         if item.get("title") == "Số tầng":
+    #     #             m = re.search(r"\d+", str(item["value"]))
+    #     #             if m:
+    #     #                 return int(m.group(0))
+    #     # except (json.JSONDecodeError, TypeError):
+    #     #     pass
+
+    #     # Search in text
+    #     text = f"{row.get('title', '')} {row.get('description', '')}".lower()
+    #     if not text:
+    #         return 1
+
+    #     # Numbers that are potential only (not actual)
+    #     potential_numbers = []
+    #     potential_pattern = re.compile(
+    #         r"(?:cải\s+tạo\s+lên|xây\s+lên|nâng\s+tầng\s+lên|"
+    #         r"xin\s+phép\s+xây|có\s+thể\s+lên|có\s+khả\s+năng\s+xây|"
+    #         r"móng(?:\s+cứng)?|thiết\s+kế\s+lên\s+tới|"
+    #         r"xây\s+tối\s+đa|dự\s+kiến\s+xây|xây\s+được|phép\s+xây\s+tối\s+đa)"
+    #         r"\s*(\d+)"
+    #     )
+    #     for m in potential_pattern.findall(text):
+    #         potential_numbers.append(int(m))
+
+    #     # Match "Gồm 5 tầng", "Tổng cộng 7 tầng"
+    #     explicit_total_pattern = re.compile(r"(?:gồm|tổng cộng|có tất cả)\s*(\d+)\s*(?:%s)" % "|".join(floor_keywords))
+    #     m_explicit = explicit_total_pattern.search(text)
+        
+    #     if m_explicit:
+    #         return int(m_explicit.group(1))
+
+    #     # Match numeric or word floors, skipping excluded contexts
+    #     candidate_numbers: List[int] = []
+    #     num_words_pattern = "|".join(sorted(word_to_num.keys(), key=lambda x: -len(x)))
+    #     floor_pattern = re.compile(rf"(\d+|{num_words_pattern})\s*(?:{'|'.join(floor_keywords)})")
+
+    #     for num_str in floor_pattern.findall(text):
+    #         if exclude_context.search(num_str):
+    #             continue
+    #         if num_str.isdigit():
+    #             candidate_numbers.append(int(num_str))
+    #         elif num_str in word_to_num:
+    #             candidate_numbers.append(word_to_num[num_str])
+
+    #     # Handle composite floor descriptions: "1 trệt 2 lầu"
+    #     # composite_pattern = re.compile(r"(\d+)\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
+    #     composite_pattern = re.compile(rf"(\d+|{num_words_pattern})\s*(trệt|lửng|gác|gác lửng|mái|tầng|lầu|tấm|mê)")
+    #     total_from_composite = 0
+    #     found_composite = False
+
+    #     for count, term in composite_pattern.findall(text):
+    #         found_composite = True
+
+    #         # Addition
+    #         if count.isdigit():
+    #             num_val = int(count)
+    #         else:
+    #             num_val = word_to_num.get(count)
+    #         # End addition
+
+    #         # num_val = int(count)
+    #         # if term in extra_floor_terms or any(term == fk for fk in floor_keywords):
+    #         if term in extra_floor_terms or term in floor_keywords:
+    #             total_from_composite += num_val
+
+    #     if found_composite and total_from_composite > 0:
+    #         return total_from_composite
+
+    #     # Remove potentials from actuals
+    #     actual = [n for n in candidate_numbers if n not in potential_numbers]
+
+    #     # Adjust for "lầu + trệt/lửng/gác"
+    #     if any(extra in text for extra in extra_floor_terms.keys()):
+    #         extra_count = sum(extra in text for extra in extra_floor_terms.keys())
+    #         if actual:
+    #             return max(actual) + extra_count
+
+    #     # Return best guess
+    #     if actual:
+    #         return max(actual)
+    #     if not actual and candidate_numbers:
+    #         return None
+    #     if any(x in text for x in ["nhà cấp 4", "nhà trệt"]):
+    #         return 1
+    #     return 1
 
 
     # ----- Construction & quality -----
