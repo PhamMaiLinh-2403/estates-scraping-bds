@@ -9,7 +9,7 @@ import numpy as np
 
 from src.selenium_manager import create_stealth_driver
 from src.scraping import Scraper
-from src.cleaning import DataCleaner, drop_mixed_listings, is_land_only
+from src.cleaning import DataCleaner, is_land_only, drop_mixed_listings, is_on_main_road, parse_and_clean_width, extract_construction_cost
 from src.feature_engineering import FeatureEngineer
 from src.address_standardizer import AddressStandardizer
 from src import config
@@ -138,7 +138,7 @@ def run_cleaning_pipeline():
             'Loại đơn giá (đ/m2 hoặc đ/m ngang)': 'đ/m2',
             'Số tầng công trình': DataCleaner.extract_num_floors(row_dict),
             'Tổng diện tích sàn': DataCleaner.extract_built_area(row_dict),
-            'Đơn giá xây dựng': DataCleaner.get_construction_cost(row_dict),
+            'Đơn giá xây dựng': 0,
             'Năm xây dựng': None,
             'Chất lượng còn lại': DataCleaner.estimate_remaining_quality(row_dict),
             'Diện tích đất (m2)': DataCleaner.extract_total_area(row_dict),
@@ -186,8 +186,15 @@ def run_cleaning_pipeline():
     except FileNotFoundError:
         print("Skipping province/district standardization because data files were not found.")
 
+    # Validate and format street names
     df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(DataCleaner.validate_and_format_street_name)
 
+    # Extract construction cost
+    df_cleaned['description'] = df_raw['description']
+    df_cleaned['title'] = df_raw['title']
+    df_cleaned.dropna(subset='title', inplace=True)
+    df_cleaned['Đơn giá xây dựng'] = df_cleaned.apply(extract_construction_cost, axis=1)
+    df_cleaned.drop(columns=['description', 'title'], inplace=True)
     # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential. The missing value might be written as empty strings.
     initial_rows = len(df_cleaned)
     df_cleaned = df_cleaned.dropna(subset=['Diện tích đất (m2)']).reset_index(drop=True)
