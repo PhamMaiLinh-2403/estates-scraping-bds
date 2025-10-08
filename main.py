@@ -192,11 +192,11 @@ def run_cleaning_pipeline():
     df_cleaned['Đường phố'] = df_cleaned['Đường phố'].apply(DataCleaner.validate_and_format_street_name)
 
     # Extract construction cost
-    df_cleaned['description'] = df_raw['description']
+    # df_cleaned['description'] = df_raw['description']
     df_cleaned['title'] = df_raw['title']
     df_cleaned.dropna(subset='title', inplace=True)
     df_cleaned['Đơn giá xây dựng'] = df_cleaned.apply(extract_construction_cost, axis=1)
-    df_cleaned.drop(columns=['description', 'title'], inplace=True)
+    df_cleaned.drop(columns=['title'], inplace=True)
     # 1. Drop rows where 'Diện tích đất (m2)' is missing, as it's essential. The missing value might be written as empty strings.
     initial_rows = len(df_cleaned)
     df_cleaned = df_cleaned.dropna(subset=['Diện tích đất (m2)']).reset_index(drop=True)
