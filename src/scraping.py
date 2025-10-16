@@ -102,7 +102,6 @@ class Scraper:
         Scrapes detailed information from a single property listing page.
         """
         try:
-            # Wait until the main body appears
             self.driver.get(url)
             WebDriverWait(self.driver, 15).until(
                 EC.presence_of_element_located((By.ID, 'product-detail-web'))
@@ -120,7 +119,6 @@ class Scraper:
                 "latitude": coordinates.get("latitude"),
                 "longitude": coordinates.get("longitude"),
                 "short_address": self._get_text(self.driver, '.re__pr-short-description'),
-                # Convert these Python objects to valid JSON strings
                 "address_parts": json.dumps(self._scrape_address_parts(), ensure_ascii=False),
                 "main_info": json.dumps(self._scrape_info_items(body), ensure_ascii=False),
                 "description": self._get_text(body, '.re__detail-content'),
@@ -132,6 +130,16 @@ class Scraper:
         except (TimeoutException, Exception) as e:
             print(f"Attempt failed for {url}: {e}")
             raise e
+        
+    @staticmethod
+    def _get_text(element, selector, by=By.CSS_SELECTOR):
+        """
+        Safely gets text from an element.
+        """
+        try:
+            return element.find_element(by, selector).text.strip()
+        except NoSuchElementException:
+            return None
 
     def _scrape_lat_long(self) -> dict:
         """
@@ -158,16 +166,6 @@ class Scraper:
             print(f"Could not parse lat/long from script tags: {e}")
 
         return {"latitude": latitude, "longitude": longitude}
-
-    @staticmethod
-    def _get_text(element, selector, by=By.CSS_SELECTOR):
-        """
-        Safely gets text from an element.
-        """
-        try:
-            return element.find_element(by, selector).text.strip()
-        except NoSuchElementException:
-            return None
 
     def _scrape_info_items(self, body):
         items_data = []
