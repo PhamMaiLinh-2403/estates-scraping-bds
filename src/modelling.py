@@ -7,7 +7,7 @@ from sklearn.metrics import r2_score, root_mean_squared_error, mean_absolute_err
 from . import config
 
 
-def predict_alley_width(df: pd.DataFrame) -> pd.DataFrame:
+def predict_adjacent_lane_width(df: pd.DataFrame) -> pd.DataFrame:
     """
     Predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values using LightGBM.
     Applies log transform on the target before train-test split and evaluates accuracy.

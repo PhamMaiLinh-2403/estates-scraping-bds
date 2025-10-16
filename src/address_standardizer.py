@@ -40,33 +40,6 @@ class AddressStandardizer:
                 conn.executescript(street_cleaned)
 
             provinces_df = pd.read_sql_query("SELECT * FROM provinces", conn)
-            # districts_df = pd.read_sql_query("SELECT * FROM districts", conn)
-
-            # districts_df = pd.read_sql_query("""
-            # SELECT d.name AS district_name, d.code AS district_code, d.province_code as province_code, 
-            #                                  d.status AS district_status
-            # FROM districts d
-            # JOIN provinces p ON d.province_code = p.code
-            # """, conn)
-
-            # wards_df = pd.read_sql_query("""
-            # SELECT w.name AS ward_name, w.code AS ward_code, w.status AS ward_status,
-            #        d.name AS district_name, d.code AS district_code,
-            #        p.name AS province_name, p.code AS province_code
-            # FROM wards w
-            # JOIN districts d ON w.district_code = d.code
-            # JOIN provinces p ON d.province_code = p.code
-            # """, conn)
-
-            # # Join để street có thêm district + province
-            # streets_df = pd.read_sql_query("""
-            #     SELECT s.name AS street_name, s.code AS street_code, s.status AS street_status,
-            #         d.name AS district_name, d.code AS district_code,
-            #         p.name AS province_name, p.code AS province_code
-            #     FROM streets s
-            #     JOIN districts d ON s.district_code = d.code
-            #     JOIN provinces p ON d.province_code = p.code
-            # """, conn)
 
             districts_df = pd.read_sql_query("""
                 SELECT d.name AS district_name, p.name AS province_name
@@ -115,20 +88,9 @@ class AddressStandardizer:
                 for ward in wards_df[wards_df['district_name'] == district]['ward_name'].unique():
                     ward_name_strip = normalize('NFC', ward.replace('Xã ', '').replace('Phường ', '').replace('Thị trấn ', '').replace('Thị Trấn ', '').strip())
                     self.reverse_ward[province][district][ward_name_strip] = ward
-        # for district in wards_df['district_name'].unique():
-        #     self.reverse_ward[district] = {}
-        #     for ward_name in wards_df[wards_df['district_name'] == district]['ward_name'].unique():
-        #         ward_name_strip = normalize('NFKD', ward_name.replace('Xã ', '').replace('Phường ', '').replace('Thị trấn ', '').replace('Thị Trấn ', '').strip())
-        #         self.reverse_ward[district][ward_name_strip] = ward_name
-        # self.reverse_district_map = {
-        #     dis.replace("Thành phố ", "").replace("Thành Phố ", "").replace("Huyện ", "")
-        #        .replace("Quận ", "").replace("Thị xã ", ""): dis
-        #     for dis in districts_df['name'].unique()
-        # }
         
         self.districts = districts_df
         self.wards = wards_df
-        # self.streets = streets_df
 
     def standardize_province(self, province_name: Optional[str]) -> Optional[str]:
         if not isinstance(province_name, str):
@@ -158,20 +120,6 @@ class AddressStandardizer:
                         return self.reverse_district[province][dis]
                 return None
             return None
-                # short_add_list = row['short_address'].split(',')
-                # if len(short_add_list) >= 3:
-                #     for pre in prefix:
-                #         if pre in short_add_list[-2]:
-                #             return short_add_list[-2]
-                #     district_true = normalize('NFKD', short_add_list[-2].strip())
-                #     province = row['Tỉnh/Thành phố']
-                #     if province in reverse_district.keys():
-                #         # Add this line to see what the keys actually are
-                #         # print(f"Keys in reverse_district[{province}] are: {list(self.reverse_district[province].keys())}")
-                #         # print(f"The district_true value is: '{district_true}'")
-                #         if reverse_district[province][district_true]:
-                #             # print(f'Return value: {self.reverse_district[province][district_true]}')
-                #             return reverse_district[province][district_true]
 
     def standardize_ward(self, row):
         ward_value = row['Xã/Phường/Thị trấn']
@@ -229,5 +177,5 @@ class AddressStandardizer:
 
             else:
                 return None
-        return None
             
+        return None  
