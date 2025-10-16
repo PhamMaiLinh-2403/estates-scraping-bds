@@ -1269,3 +1269,213 @@ class DataCleaner:
                 except ValueError:
                     pass  
         return None
+    
+
+class DataImputer:
+    @staticmethod
+    def fill_missing_width(row):
+        """
+        Fills missing width by taking the square root of the construction area.
+        Uses the already calculated 'Diện tích xây dựng' column.
+        """
+        width = row.get("Kích thước mặt tiền (m)")
+
+        if pd.isna(width):
+            # Get the construction area from the column that was already computed in main.py
+            construction_area = row.get('Diện tích xây dựng')
+            
+            # Ensure construction_area is a valid number before calculating
+            if pd.notna(construction_area) and construction_area > 0:
+                return round(float(construction_area) ** 0.5, 2)
+        
+        # If width is not missing, or if it cannot be imputed, return the original value.
+        return width 
+
+    @staticmethod
+    def fill_missing_length(row):
+        """
+        Fills missing length by dividing the construction area by the width.
+        Uses already calculated columns.
+        """
+        length = row.get("Kích thước chiều dài (m)")
+
+        if pd.isna(length):
+            width = row.get("Kích thước mặt tiền (m)")
+            construction_area = row.get('Diện tích xây dựng')
+            
+            # Ensure both width and area are valid numbers before dividing
+            if pd.notna(width) and width > 0 and pd.notna(construction_area):
+                return round(float(construction_area) / float(width), 2)
+        
+        # If length is not missing, or if it cannot be imputed, return the original value.
+        return length 
+    
+    # @staticmethod
+    # def _query_overpass_for_roads(lat, lon, radius=300, overpass_url = OVERPASS_URL):
+    #     """
+    #     Helper function to query Overpass API for major roads near a point.
+    #     Returns a list of shapely LineString objects.
+    #     """
+    #     # This query finds major roads within a given radius
+    #     query = f"""
+    #     [out:json][timeout:60];
+    #     (
+    #       way
+    #         ["highway"]
+    #         ["highway"~"primary|secondary|tertiary|trunk|motorway|service"]
+    #         (around:{radius},{lat},{lon});
+    #     );
+    #     out geom;
+    #     """
+    #     try:
+    #         response = requests.get(overpass_url, params={'data': query})
+    #         response.raise_for_status()  
+    #         data = response.json()
+            
+    #         roads = []
+    #         for element in data.get('elements', []):
+    #             if 'geometry' in element:
+    #                 # Create a line geometry from the points
+    #                 line = geom.LineString([(p['lon'], p['lat']) for p in element['geometry']])
+    #                 roads.append(line)
+    #         return roads
+    #     except (requests.RequestException, ValueError) as e:
+    #         print(f"Overpass API query failed: {e}")
+    #         return []
+
+    # @staticmethod
+    # def fill_missing_distance_to_the_main_road(row):
+    #     """
+    #     Fills the missing distance to main road by calculating 
+    #     distance from the property's coordinates to the nearest major road.
+    #     """
+    #     if pd.notna(row['Khoảng cách tới trục đường chính (m)']):
+    #         return row['Khoảng cách tới trục đường chính (m)']
+
+    #     lat = row.get('latitude')
+    #     lon = row.get('longitude')
+
+    #     if pd.isna(lat) or pd.isna(lon):
+    #         return None
+
+    #     # Get major roads from Overpass API
+    #     major_roads = DataImputer._query_overpass_for_roads(lat, lon)
+
+    #     if not major_roads:
+    #         # If query failed or returned no data, return a random distance
+    #         fallback_distance = random.randint(10, 200)
+    #         print(f"Using fallback random distance: {fallback_distance}m for lat={lat}, lon={lon}")
+    #         return fallback_distance
+
+    #     property_location = geom.Point(lon, lat)
+
+    #     try:
+    #         # Calculate the distance to each major road
+    #         distances = [property_location.distance(road) for road in major_roads]
+    #         min_distance_degrees = min(distances)
+    #         distance_in_meters = min_distance_degrees * 111139  # Approximate conversion
+    #         time.sleep(0.5)
+    #         return round(distance_in_meters, 2)
+    #     except Exception as e:
+    #         # In case geometry calculation fails
+    #         fallback_distance = random.randint(10, 200)
+    #         print(f"Distance calculation failed: {e}. Using fallback distance: {fallback_distance}m")
+    #         return fallback_distance
+            
+
+class FeatureEngineer:
+    @staticmethod
+    def calculate_estimated_price(row):
+        """
+        Calculate the estimated price of the property.
+        """
+        total_price = row.get('Giá rao bán/giao dịch')
+
+        if not total_price:
+            return None
+
+        return round(total_price * 0.98, 2)
+    
+    @staticmethod
+    def get_location_category(row):
+        """
+        Determines the asset's position category (VT1-VT4) based on distance
+        to the main road and alley width.
+        """
+        distance = row.get('Khoảng cách tới trục đường chính (m)')
+        alley_width = row.get('Độ rộng ngõ/ngách nhỏ nhất (m)')
+
+        # Cannot determine VT without distance to the main road.
+        if pd.isna(distance):
+            return None
+
+        if distance == 0:
+            return "VT1"
+
+        # If distance > 0, alley width is required to classify further.
+        if pd.isna(alley_width):
+            return None
+
+        if alley_width >= 3.5:
+            return "VT2"
+        elif 2 <= alley_width < 3.5:
+            return "VT3"
+        elif alley_width < 2:
+            return "VT4"
+
+        return None
+
+    def calculate_business_advantage(row):
+        """
+        Calculates the 'Lợi thế kinh doanh' (Business Advantage) based on
+        the asset's location category (VT) and its district type (Quận/Huyện).
+        """
+        location_cate = FeatureEngineer.get_location_category(row)
+        district_name = row.get('Thành phố/Quận/Huyện/Thị xã')
+
+        if not location_cate or not isinstance(district_name, str):
+            return "Kém"
+
+        is_quan = "quận" in district_name.lower()
+        is_huyen = not is_quan
+
+        if location_cate in ["VT1", "VT2"] and is_quan:
+            return "Tốt"
+        if location_cate == "VT1" and is_huyen:
+            return "Khá"
+        if (location_cate == "VT2" and is_huyen) or (location_cate == "VT3"):
+            return "Trung bình"
+
+        return "Kém"
+
+    @staticmethod
+    def calculate_land_unit_price(row):
+        """
+        Calculates the land unit price per square meter.
+        - If 'is_land' is True, uses a simple formula: Price / Area.
+        - Otherwise, subtract building value from the price before dividing with area.
+        """
+        # --- Use the temporary boolean flag ---  
+        total_price = row.get('Giá rao bán/giao dịch')
+        land_area = row.get('Diện tích đất (m2)')
+        construction_cost_per_sqm = row.get('Đơn giá xây dựng')
+        remaining_quality = row.get('Chất lượng còn lại')
+        total_floor_area = row.get('Tổng diện tích sàn')
+
+        if pd.isna(total_price) or pd.isna(construction_cost_per_sqm) or \
+                pd.isna(land_area) or pd.isna(remaining_quality) or \
+                pd.isna(total_floor_area):
+            return None
+
+        if land_area <= 0 or total_floor_area < 0:
+            return None
+
+        building_value = construction_cost_per_sqm * total_floor_area * remaining_quality
+
+        if building_value >= total_price:
+            return round(total_price / land_area, 2)
+
+        land_value = total_price - building_value
+        land_unit_price = land_value / land_area
+
+        return round(land_unit_price, 2)
