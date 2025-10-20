@@ -231,7 +231,9 @@ def run_modelling():
 
     # 4. Recalculate business advantage as it depends on the imputed values
     print("Recalculating business advantage with imputed data...")
-    df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)
+    df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)\
+    # Drop all the rows with NaN values
+    df = df.dropna(axis=0)
 
     # 5. Export the final dataset to an Excel file
     print(f"Exporting final dataset to Excel file: {config.FINAL_OUTPUT}")
