@@ -205,7 +205,16 @@ class DataCleaner:
 
         if address_details:
             return ", ".join(address_details)
-        elif len(parts) > 3 and not parts[0].lower().startswith(("đường", "phố", "quốc lộ", "đại lộ", "xa lộ")):
+        elif (
+            len(parts) > 3
+            and not parts[0].lower().startswith((
+                "đường", "phố", "quốc lộ", "đại lộ", "xa lộ"
+            ))
+            and (
+                re.search(r'\b(hẻm|ngõ|ngách|kiệt|dự án|khu đô thị|kđt|khu dân cư|ấp|tổ|khu phố)\b', parts[0])
+                or re.search(r"\d+", parts[0])
+            )
+        ):
             return parts[0]
         return DataCleaner._is_on_main_road(text)
             
