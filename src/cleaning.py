@@ -351,7 +351,7 @@ class DataCleaner:
         cleaned_description = DataCleaner.clean_description_text(row.get('description', '').lower().strip().replace('+', ' ').replace('x', ' ').replace('*', ' '))
         cleaned_text = cleaned_title + cleaned_description
 
-        # Cần nghĩ cách tránh trường hợp false positive như gác lửng, xe ba gác 
+        # Cần nghĩ cách tránh trường hợp false positive như gác lửng (tính 2 lần), xe ba gác 
 
         # TH1: Lấy từ "Số tầng" trong trường other_info
         other_info = row.get("other_info", "")
@@ -375,8 +375,8 @@ class DataCleaner:
             return 1
         
         # TH3: Tổng số tầng 
-        main_pattern = rf"\b((\d+)|({word_number_pattern}))\s*({floor_pattern})\b" # warning: 3 tầng: 1 trệt 2 lầu 
-        additional_pattern = rf"\b(((\d+)|({word_number_pattern}))\s*)?({additional_floor_pattern})\b" 
+        main_pattern = rf"\b((\d+)|({word_number_pattern}))\s*({floor_pattern})\b" # warning: 3 tầng: 1 trệt 2 lầu     
+        additional_pattern = rf"\b(((\d+)|({word_number_pattern}))\s*)?({additional_floor_pattern})\b" # warning: hybrid, liệt kê tổng số tầng trước xong đằng sau liệt kê từng tầng
         
         # TH4: Liệt kê cấu trúc từng tầng 
         additional_floor_descriptions = re.findall(rf"(tầng\s*({additional_floor_pattern})\s*:|({additional_floor_pattern})\s*:)", cleaned_description, re.IGNORECASE)
