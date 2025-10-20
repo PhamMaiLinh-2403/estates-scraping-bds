@@ -1173,6 +1173,6 @@ class FeatureEngineer:
             return round(total_price / land_area, 2)
 
         land_value = total_price - building_value
-        land_unit_price = land_value / land_area
+        land_unit_price = (land_value * 0.98) / land_area
 
         return round(land_unit_price, 2)
