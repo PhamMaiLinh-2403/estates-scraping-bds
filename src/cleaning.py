@@ -336,6 +336,7 @@ class DataCleaner:
 
         word_number_pattern = "|".join(sorted(word_to_num.keys(), key=lambda x: -len(x)))
         floor_pattern = "|".join(floor_keywords)
+        additional_floor_pattern = "|".join(additional_floor_keywords)
 
         def extract_floor_value(s):
             if s.isdigit():
@@ -358,7 +359,7 @@ class DataCleaner:
 
         # TH2: Nhà cũ, nhà cấp 4
         text = f"{row.get('title', '')} {row.get('description', '')}".lower()
-        cleaned_text = text.replace('+', ' ').replace('x', ' ').replace('*', ' ')
+        cleaned_text = DataCleaner.clean_description_text(text.replace('+', ' ').replace('x', ' ').replace('*', ' '))
 
         if re.search(r"nhà (?:\w+\s*){0,5}(?:cũ|nát)", cleaned_text, re.IGNORECASE):
             return 0
@@ -421,8 +422,7 @@ class DataCleaner:
                     continue
 
         # TH6: Các trường hợp liệt kê tổng số tầng + sân thượng, tum, gác lửng (optional)...
-        additional_floor_pattern = "|".join(additional_floor_keywords)
-        main_floors = rf"(?:\b\w+\b\s*){{0,5}}\b(\d+|{word_number_pattern})\s*(?:{floor_pattern})\b"
+        main_floors = rf"(?:\b\w+\b\s*){{0,7}}\b(\d+|{word_number_pattern})\s*(?:{floor_pattern})\b"
         additional_floors = rf"(?:\b\w+\b\s*){{0,5}}\b(?:{additional_floor_pattern})\b"
 
         m1 = re.findall(main_floors, cleaned_text, flags=re.IGNORECASE)
