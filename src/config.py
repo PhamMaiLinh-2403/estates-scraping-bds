@@ -27,7 +27,7 @@ MAX_WORKERS = 2
 # Scraping details configuration
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": True,
-    "start_index": 3001,
+    "start_index": 0,
     "count": 1000,
     "stagger_mode": "random",
     "stagger_step_sec": 3.0,
@@ -38,9 +38,6 @@ SCRAPING_DETAILS_CONFIG = {
 BASE_URL = "https://batdongsan.com.vn"
 SEARCH_PAGE_URL = f"{BASE_URL}/ban-nha-rieng"
 PAGE_NUMBER = 1  # Starting page number for scraping
-
-# Helper URLs
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 # File path settings
 OUTPUT_DIR = "output"
