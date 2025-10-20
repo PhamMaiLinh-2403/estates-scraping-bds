@@ -6,8 +6,11 @@ import numpy as np
 import requests
 import random
 from rapidfuzz import fuzz, process
+import osmnx as ox
 import shapely.geometry as geom
 from shapely.ops import nearest_points
+from geopy.distance import geodesic
+from functools import lru_cache
 
 from src.config import *
 
@@ -966,6 +969,8 @@ class DataCleaner:
 
 
 class DataImputer:
+    _graph_cache = {}
+
     @staticmethod
     def fill_missing_width(row):
         """
@@ -1003,78 +1008,76 @@ class DataImputer:
         
         # If length is not missing, or if it cannot be imputed, return the original value.
         return length 
-    
-    # @staticmethod
-    # def _query_overpass_for_roads(lat, lon, radius=300, overpass_url = OVERPASS_URL):
-    #     """
-    #     Helper function to query Overpass API for major roads near a point.
-    #     Returns a list of shapely LineString objects.
-    #     """
-    #     # This query finds major roads within a given radius
-    #     query = f"""
-    #     [out:json][timeout:60];
-    #     (
-    #       way
-    #         ["highway"]
-    #         ["highway"~"primary|secondary|tertiary|trunk|motorway|service"]
-    #         (around:{radius},{lat},{lon});
-    #     );
-    #     out geom;
-    #     """
-    #     try:
-    #         response = requests.get(overpass_url, params={'data': query})
-    #         response.raise_for_status()  
-    #         data = response.json()
-            
-    #         roads = []
-    #         for element in data.get('elements', []):
-    #             if 'geometry' in element:
-    #                 # Create a line geometry from the points
-    #                 line = geom.LineString([(p['lon'], p['lat']) for p in element['geometry']])
-    #                 roads.append(line)
-    #         return roads
-    #     except (requests.RequestException, ValueError) as e:
-    #         print(f"Overpass API query failed: {e}")
-    #         return []
 
-    # @staticmethod
-    # def fill_missing_distance_to_the_main_road(row):
-    #     """
-    #     Fills the missing distance to main road by calculating 
-    #     distance from the property's coordinates to the nearest major road.
-    #     """
-    #     if pd.notna(row['Khoảng cách tới trục đường chính (m)']):
-    #         return row['Khoảng cách tới trục đường chính (m)']
+    @staticmethod
+    def _get_cached_graph(lat, lon, radius=300):
+        """
+        Retrieve a cached OSMnx graph if nearby, otherwise download a new one.
+        """
+        key = (lat, lon, radius)
 
-    #     lat = row.get('latitude')
-    #     lon = row.get('longitude')
+        if key in DataImputer._graph_cache:
+            return DataImputer._graph_cache[key]
 
-    #     if pd.isna(lat) or pd.isna(lon):
-    #         return None
+        try:
+            G = ox.graph_from_point((lat, lon), dist=radius, network_type='drive')
+            DataImputer._graph_cache[key] = G
+            return G
+        except Exception as e:
+            print(f"OSMnx graph fetch failed: {e}")
+            return None
 
-    #     # Get major roads from Overpass API
-    #     major_roads = DataImputer._query_overpass_for_roads(lat, lon)
+    @staticmethod
+    def _query_osmnx_for_roads(lat, lon, radius=300):
+        """
+        Helper function to get major roads near a point using OSMnx.
+        Returns a GeoDataFrame of filtered roads or None if download fails.
+        """
+        G = DataImputer._get_cached_graph(lat, lon, radius)
+        if G is None:
+            return None
 
-    #     if not major_roads:
-    #         # If query failed or returned no data, return a random distance
-    #         fallback_distance = random.randint(10, 200)
-    #         print(f"Using fallback random distance: {fallback_distance}m for lat={lat}, lon={lon}")
-    #         return fallback_distance
+        try:
+            edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
+            major_roads = edges[edges['highway'].isin([
+                'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'service'
+            ])]
+            return major_roads
+        except Exception as e:
+            print(f"Failed to convert graph to GDF: {e}")
+            return None
 
-    #     property_location = geom.Point(lon, lat)
+    @staticmethod
+    def fill_missing_distance_to_the_main_road(row):
+        """
+        Fills missing distance to main road by calculating 
+        distance from property's coordinates to the nearest major road.
+        Uses OSMnx with caching.
+        """
+        if pd.notna(row.get('Khoảng cách tới trục đường chính (m)')):
+            return row['Khoảng cách tới trục đường chính (m)']
 
-    #     try:
-    #         # Calculate the distance to each major road
-    #         distances = [property_location.distance(road) for road in major_roads]
-    #         min_distance_degrees = min(distances)
-    #         distance_in_meters = min_distance_degrees * 111139  # Approximate conversion
-    #         time.sleep(0.5)
-    #         return round(distance_in_meters, 2)
-    #     except Exception as e:
-    #         # In case geometry calculation fails
-    #         fallback_distance = random.randint(10, 200)
-    #         print(f"Distance calculation failed: {e}. Using fallback distance: {fallback_distance}m")
-    #         return fallback_distance
+        lat, lon = row.get('latitude'), row.get('longitude')
+        if pd.isna(lat) or pd.isna(lon):
+            return None
+
+        major_roads = DataImputer._query_osmnx_for_roads(lat, lon)
+        if major_roads is None or major_roads.empty:
+            fallback = random.randint(10, 200)
+            print(f"Using fallback random distance: {fallback}m for lat={lat}, lon={lon}")
+            return fallback
+
+        try:
+            pt = geom.Point(lon, lat)
+            nearest_geom = nearest_points(pt, major_roads.unary_union)[1]
+            nearest_coords = (nearest_geom.y, nearest_geom.x)
+            distance = geodesic((lat, lon), nearest_coords).meters
+            time.sleep(0.05)  
+            return round(distance, 2)
+        except Exception as e:
+            fallback = random.randint(10, 200)
+            print(f"Distance calc failed: {e}. Fallback {fallback}m")
+            return fallback
             
 
 class FeatureEngineer:
