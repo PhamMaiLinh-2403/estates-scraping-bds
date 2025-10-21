@@ -375,8 +375,8 @@ class DataCleaner:
             return 1
         
         # TH3: Tổng số tầng 
-        main_pattern = rf"\b((\d+)|({word_number_pattern}))\s*({floor_pattern})\b" # warning: 3 tầng: 1 trệt 2 lầu     
-        additional_pattern = rf"\b(((\d+)|({word_number_pattern}))\s*)?({additional_floor_pattern})\b" # warning: hybrid, liệt kê tổng số tầng trước xong đằng sau liệt kê từng tầng
+        floor_list = re.findall(rf"\b((\d+)|({word_number_pattern}))\s*({floor_pattern})\b", cleaned_description, re.IGNORECASE) # warning: 3 tầng: 1 trệt 2 lầu     
+        
         
         # TH4: Liệt kê cấu trúc từng tầng 
         additional_floor_descriptions = re.findall(rf"(tầng\s*({additional_floor_pattern})\s*:|({additional_floor_pattern})\s*:)", cleaned_description, re.IGNORECASE)
