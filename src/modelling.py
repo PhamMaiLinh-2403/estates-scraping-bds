@@ -1,13 +1,13 @@
 import pandas as pd
 import numpy as np
-import lightgbm as lgb
 import re
+import lightgbm as lgb
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score, root_mean_squared_error, mean_absolute_error
+
 from . import config
 
-
-def predict_adjacent_lane_width(df: pd.DataFrame) -> pd.DataFrame:
+def predict_adjacent_lane_width(df):
     """
     Predict and fill missing 'Độ rộng ngõ/ngách nhỏ nhất (m)' values using LightGBM.
     Applies log transform on the target before train-test split and evaluates accuracy.
@@ -15,31 +15,8 @@ def predict_adjacent_lane_width(df: pd.DataFrame) -> pd.DataFrame:
     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
     df_copy = df.copy()
 
-    df_internal_train = df_copy[df_copy['Đơn giá đất'].notna() & df_copy[target_col].notna() & (df_copy[target_col] != 0)]
-    print(f"- Found {len(df_internal_train)} valid internal records for ML training.")
-
-    try:
-        df_external_train = pd.read_excel(config.TRAIN_FILE)
-        df_external_train.columns = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn',
-       'Đường phố', 'Chi tiết', 'Nguồn thông tin',
-       'Tình trạng giao dịch', 'Thời điểm giao dịch/rao bán',
-       'Thông tin liên hệ', 'Giá rao bán/giao dịch', 'Giá ước tính',
-       'Loại đơn giá (đ/m2 hoặc đ/m ngang)', 'Đơn giá đất',
-       'Số tầng công trình', 'Chất lượng còn lại',
-       'Giá trị công trình xây dựng', 'Diện tích đất (m2)',
-       'Tổng diện tích sàn', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)',
-       'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)',
-       'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất',
-       'Hình ảnh của bài đăng', 'Ảnh chụp màn hình thông tin thu thập',
-       'Yếu tố khác', 'Lợi thế kinh doanh']
-        print(f"- Loaded {len(df_external_train)} external records from '{config.TRAIN_FILE}'.")
-    except FileNotFoundError:
-        df_external_train = pd.DataFrame()
-        print(f"- WARNING: External training data not found at '{config.TRAIN_FILE}'.")
-
-    print(f'Calculating additional features for One Housing...')
-
-    df_external_train['Số ngày tính từ lúc đăng tin'] = 0
+    df_train = df_copy[df_copy['Đơn giá đất'].notna() & df_copy[target_col].notna() & (df_copy[target_col] != 0)]
+    print(f"- Found {len(df_train)} valid internal records for ML training.")
 
     numeric_features = [
         'Diện tích đất (m2)', 'Kích thước mặt tiền (m)',
@@ -53,15 +30,13 @@ def predict_adjacent_lane_width(df: pd.DataFrame) -> pd.DataFrame:
     ]
     features = numeric_features + categorical_features
 
-    df_train = pd.concat([df_external_train, df_internal_train], ignore_index=True)
-    initial_train_count = len(df_train)
+    train_count = len(df_train)
     df_train.dropna(subset=['Đơn giá đất', target_col], inplace=True)
     df_train = df_train[df_train[target_col] != 0].copy()
-
-    print(f"- Combined internal and external data, resulting in {len(df_train)} clean training records (dropped {initial_train_count - len(df_train)} rows).")
+    print(f"- Found {len(df_train)} clean training records (dropped {train_count - len(df_train)} rows).")
 
     if len(df_train) < 50:
-        print("- Not enough training data (< 50 records). Skipping alley width prediction.")
+        print("- Not enough training data (< 50 records). Skipping adjacent lane width prediction.")
         return df
 
     X = df_train[features].copy()
