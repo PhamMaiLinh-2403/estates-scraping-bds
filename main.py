@@ -154,7 +154,7 @@ def clean_details():
     print("Start imputing missing values...")
     df['Kích thước mặt tiền (m)'] = df.apply(DataImputer.fill_missing_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
-    # df["Khoảng cách tới trục đường chính (m)"] = df.apply(DataImputer.fill_missing_distance_to_the_main_road, axis=1)
+    df["Khoảng cách tới trục đường chính (m)"] = df.apply(DataImputer.fill_missing_distance_to_the_main_road, axis=1)
 
     # 4. Create new features 
     print("Start feature engineeering...")
@@ -232,8 +232,6 @@ def run_modelling():
     # 4. Recalculate business advantage as it depends on the imputed values
     print("Recalculating business advantage with imputed data...")
     df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)\
-    # Drop all the rows with NaN values
-    df = df.dropna(axis=0)
 
     # 5. Export the final dataset to an Excel file
     print(f"Exporting final dataset to Excel file: {config.FINAL_OUTPUT}")

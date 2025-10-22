@@ -12,7 +12,6 @@ import osmnx as ox
 import shapely.geometry as geom
 from shapely.ops import nearest_points
 from geopy.distance import geodesic
-from functools import lru_cache
 
 from src.config import *
 
@@ -324,36 +323,11 @@ class DataCleaner:
             pass
         return None
     
+    @staticmethod
     def extract_num_floors(row):
-        def extract_floor_value(s, word_to_num):
-            try:
-                return ceil(float(s))
-            except (ValueError, TypeError):
-                if isinstance(s, str):
-                    word = s.lower().strip()
-                    if word in word_to_num:
-                        return word_to_num[word]
-            return None 
-        
-        word_to_num = {
-            "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
-            "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
-            "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
-            "mười lăm": 15, "mười sáu": 16
-        }
-        word_number_pattern = "|".join(sorted(word_to_num.keys(), key=lambda x: -len(x)))
+        cleaned_text = (str(row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip())
 
-        floor_pattern = r"tầng|lầu|tấm|mê"
-        additional_floor_pattern = r"sân thượng|trệt|tum|hầm|gác lửng|gác|lửng" 
-        forbidden_keywords = r'giấy phép xây dựng|gpxd|có thể xây|cải tạo|được phép xây|phù hợp xây|thích hợp xây|có thể nâng'
-
-        cleaned_title = row.get('title', '').lower().strip()
-        cleaned_description = DataCleaner.clean_description_text(row.get('description', '').lower().strip().replace('+', ' ').replace('x', ' ').replace('*', ' '))
-        cleaned_text = cleaned_title + cleaned_description
-
-        # Cần nghĩ cách tránh trường hợp false positive như gác lửng (tính 2 lần), xe ba gác 
-
-        # TH1: Lấy từ "Số tầng" trong trường other_info
+        # --- TH1: Extract from other_info ---
         other_info = row.get("other_info", "")
         if isinstance(other_info, str):
             try:
@@ -363,219 +337,14 @@ class DataCleaner:
                     return int(re.search(r"\d+", ele).group())
             except Exception:
                 pass
-
         if isinstance(other_info, dict) and other_info.get("Số tầng"):
             return int(other_info["Số tầng"].split()[0])
 
-        # TH2: Nhà cũ, nhà cấp 4
-        if re.search(r"nhà (?:\w+\s*){0,3}(?:cũ|nát)", cleaned_text, re.IGNORECASE):
+        # --- TH2: Nhà cũ/nát hoặc nhà cấp 4 ---
+        if re.search(r"nhà (?:\w+\s*){0,3}(?:cũ|nát)", cleaned_text):
             return 0
-
         if re.search(r'nhà cấp 4|nhà c4|cấp 4|nc4', cleaned_text):
             return 1
-        
-        # TH3: Tổng số tầng 
-        main_pattern = rf"\b((\d+)|({word_number_pattern}))\s*({floor_pattern})\b" # warning: 3 tầng: 1 trệt 2 lầu     
-        additional_pattern = rf"\b(((\d+)|({word_number_pattern}))\s*)?({additional_floor_pattern})\b" # warning: hybrid, liệt kê tổng số tầng trước xong đằng sau liệt kê từng tầng
-        
-        # TH4: Liệt kê cấu trúc từng tầng 
-        additional_floor_descriptions = re.findall(rf"(tầng\s*({additional_floor_pattern})\s*:|({additional_floor_pattern})\s*:)", cleaned_description, re.IGNORECASE)
-        main_floor_descriptions = re.findall(rf"tầng\s*(?:(?:\d+|{word_number_pattern})(?:\s*[,+;]\s*(?:\d+|{word_number_pattern}))*)\s*:", cleaned_description, re.IGNORECASE)
-
-        if main_floor_descriptions:
-            floor_numbers = []
-            for desc in main_floor_descriptions:
-                nums = re.findall(rf"(\d+|{word_number_pattern})", desc, re.IGNORECASE)
-                for n in nums:
-                    val = extract_floor_value(n, word_to_num)
-                    if val is not None:
-                        floor_numbers.append(val)
-
-            if floor_numbers:
-                additional_count = len(additional_floor_descriptions)
-                return max(floor_numbers) + additional_count
-
-        return None
-
-
-    # @staticmethod
-    # def extract_num_floors(row):
-    #     def new_check_additional_floor(string, additional_floor):
-    #         result = 0
-    #         for word in additional_floor:
-    #             if word in string:
-    #                 result += 1
-    #         search_st = re.search(pattern=r'(\Wst\W)', string=string)
-    #         if search_st:
-    #             result += 1
-    #         search_gl = re.search(pattern=r'gác lửng|gác lững|ghác lửng|ghác lững', string=string)
-    #         if search_gl:
-    #             result -= 1
-    #         return result 
-
-    #     def is_float(num):
-    #         try:
-    #             float(num)
-    #             return True
-    #         except:
-    #             return False
-
-    #     def extract_separate(lower_value, floor_keywords):
-    #         value_list = lower_value.split()
-    #         forbidden_pattern = r'giấy phép xây dựng|giấy phép xây|phép xây dựng|gpxd|có thể xây|cải tạo|được phép xây'
-    #         additional_floor = ['sân thượng', 'sân thương', 'trêt', 'trệt', 'tret', 'tum', 'hầm', 'hâm', 'gác', 'gac', 'lửng', 'lững', 'lừng']
-    #         if 'trệt' in floor_keywords:
-    #             additional_floor = ['sân thượng', 'sân thương',  'tum', 'hầm', 'hâm', 'gác', 'gac', 'lửng', 'lững', 'lừng']
-    #         word_to_num = {
-    #                 "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
-    #                 "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
-    #                 "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
-    #                 "mười lăm": 15, "mười sáu": 16
-    #             }
-    #         for keyword in floor_keywords: # Check cho từng chiếc keyword
-    #             if keyword in lower_value: # Nếu trong string có một trong những chiếc keyword
-    #                 i = 0
-    #                 while i < len(value_list):
-    #                     # for value in value_list: # Tìm trong list string mà đã được tách ra sẵn
-    #                 #     if keyword in value: # Nếu chiếc keyword đã tìm thấy ban nãy là của từ này
-    #                         # word_index = value_list.index(value) # Lấy index của từ
-    #                     if keyword in value_list[i]: # Tìm index của chiếc từ keyword floor 
-    #                         # Trong trường hợp mà nó bị dính chữ vào với nhau
-    #                         extracted_floor = value_list[i].replace(keyword, '').replace(',','.')
-    #                         if is_float(extracted_floor) or (extracted_floor in word_to_num.keys()): 
-    #                             word_lower = i - 4 if i - 4 >= 0 else 0
-    #                             word_upper = i + 4 if i + 4 < len(value_list) else len(value_list) - 1
-    #                             search_range = ' '.join(value_list[word_lower:word_upper + 1]) # Tìm trong khoảng 5 từ trước - sau của từ
-    #                             forbidden_word = re.search(pattern=forbidden_pattern, string=search_range)
-    #                             if forbidden_word: # Nếu xuất hiện forbidden word
-    #                                 i += 1
-    #                             else:
-    #                                 # if 'hiện trạng' in ' '.join(value_list[word_lower:i]): # Nếu hiện trạng 3 tầng --> return luôn
-    #                                 #     if is_float(extracted_floor):
-    #                                 #         return abs(float(extracted_floor))
-    #                                 #     if extracted_floor in word_to_num.keys():
-    #                                 #         return word_to_num[extracted_floor]
-    #                                 # else:
-    #                                 if is_float(extracted_floor) or (extracted_floor in word_to_num.keys()):
-    #                                     add_key = new_check_additional_floor(search_range, additional_floor)
-    #                                     if is_float(extracted_floor):
-    #                                         return abs(float(extracted_floor)) + add_key
-    #                                     return word_to_num[extracted_floor] + add_key
-    #                                 else:
-    #                                     add_key = new_check_additional_floor(search_range, additional_floor)
-    #                                     if add_key > 0:
-    #                                         return add_key + 1
-    #                                     else:
-    #                                         i += 1
-    #                         # Nếu có thể extract vị trí ở đằng trước keyword đã cho
-    #                         elif i - 1 >= 0:
-    #                             extracted_floor = value_list[i - 1].replace(',', '.')
-    #                             word_lower = i - 4 if i - 4 >= 0 else 0
-    #                             word_upper = i + 4 if i + 4 < len(value_list) else len(value_list) - 1
-    #                             search_range = ' '.join(value_list[word_lower:word_upper + 1]) # Tìm trong khoảng 5 từ trước - sau của từ
-    #                             forbidden_word = re.search(pattern=forbidden_pattern, string=search_range)
-    #                             if forbidden_word: # Nếu xuất hiện forbidden word
-    #                                 i += 1
-    #                             else:
-    #                                 if 'hiện trạng' in ' '.join(value_list[word_lower:i]): # Nếu hiện trạng 3 tầng --> return luôn
-    #                                     if is_float(extracted_floor):
-    #                                         return abs(float(extracted_floor))
-    #                                     elif extracted_floor in word_to_num.keys():
-    #                                         return word_to_num[extracted_floor]
-    #                                     else:
-    #                                         i += 1
-    #                                 else:
-    #                                     if is_float(extracted_floor) or (extracted_floor in word_to_num.keys()):
-    #                                         add_key = new_check_additional_floor(search_range, additional_floor)
-    #                                         if is_float(extracted_floor):
-    #                                             return abs(float(extracted_floor)) + add_key
-    #                                         return word_to_num[extracted_floor] + add_key
-    #                                     else:
-    #                                         add_key = new_check_additional_floor(search_range, additional_floor)
-    #                                         if add_key > 0:
-    #                                             return add_key + 1
-    #                                         else:
-    #                                             i += 1
-    #                         else:
-    #                             i += 1
-    #                     else:
-    #                         i += 1
-            
-    #         return None
-        
-        # floor_keywords = ['tầng', 'lầu', 'tấm', 'mê']
-        # word_to_num = {
-        #         "một": 1, "hai": 2, "ba": 3, "bốn": 4, "năm": 5, "sáu": 6,
-        #         "bảy": 7, "bẩy": 7, "tám": 8, "chín": 9, "mười": 10,
-        #         "mười một": 11, "mười hai": 12, "mười ba": 13, "mười bốn": 14,
-        #         "mười lăm": 15, "mười sáu": 16
-        #     }
-        # # ------- TH1: Thông tin đã có sẵn ở other_info ------
-        # other_info = row.get("other_info", "")
-
-        # if isinstance(other_info, str):
-        #     other_info = json.loads(other_info)
-        #     ele =  other_info.get("Số tầng")
-        #     if ele is not None:
-        #         return int(re.search(r"\d+", ele).group())
-        
-        # if isinstance(other_info, dict) and other_info.get("Số tầng"):
-        #     return int(other_info["Số tầng"].split()[0]) 
-        # # ------ TH2: Nhà cũ/nhà cấp 4 ở title/description ------
-        # # Xét của description trước do description thường được viết đầy đủ hơn
-        # if pd.notna(row['description']):
-        #     lower_des = row['description'].lower().replace('+', ' ').replace('x',' ').replace('*', ' ')
-        #     old_house = re.search(pattern=r'nhà (?:\w+\s*){0,5}cũ|bán(?:\s+\S\s*){0,5}đất', string=lower_des)
-        #     if old_house:
-        #         return 0
-        #     cap4 = re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4|nc4|nhà trệt|nhà nát', string=lower_des)
-        #     if cap4:
-        #         if cap4.group(0) == 'nhà trệt':
-        #             extract_result = extract_separate(lower_des, floor_keywords)
-        #             if extract_result:
-        #                 return extract_result
-        #         return 1
-        # if pd.notna(row['title']):
-        #     lower_title = row['title'].lower().replace('+', ' ').replace('x',' ').replace('*', ' ')
-        #     old_house = re.search(pattern=r'nhà (?:\w+\s*){0,5}cũ|bán(?:\s+\S\s*){0,5}đất', string=lower_title)
-        #     if old_house:
-        #         return 0
-        #     cap4 = re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4|nc4|nhà trệt|nhà nát', string=lower_title)
-        #     if cap4:
-        #         if cap4.group(0) == 'nhà trệt':
-        #             extract_result = extract_separate(lower_title, floor_keywords)
-        #             if extract_result:
-        #                 return extract_result
-        #         return 1
-        # # ------ TH3: Xét tổng số tầng ------
-        #     extract_result = extract_separate(lower_title, floor_keywords)
-        #     if extract_result:
-        #         return extract_result
-        # if pd.notna(row['description']):
-        #     # Trong trường hợp nêu rõ tầng 1, tầng 2,... thì max sẽ là tổng số tầng
-        #     total_pattern = re.findall(pattern=r'(?:tầng|lầu|tấm|mê)\s* ([\d\w]+):', string=lower_des)
-        #     if total_pattern:
-        #         total_floor_num = []
-        #         for digit in total_pattern:
-        #             if is_float(digit):
-        #                 total_floor_num.append(abs(float(digit)))
-        #             elif digit in word_to_num.keys():
-        #                 total_floor_num.append(word_to_num[digit])
-        #         if total_floor_num:
-        #             return max(total_floor_num)
-        # #------TH4: Xét số tầng mà có miêu tả cấu trúc cụ thể (Kiểu như trệt 2 lầu)------
-        #     else:
-        #         extract_result = extract_separate(lower_des, floor_keywords)
-        #         if extract_result:
-        #             return extract_result
-        #         else:
-        #             extract_result = extract_separate(lower_des, ['trệt', 'trêt', 'tret'])
-        #             if extract_result:
-        #                 return extract_result  
-        #             extract_result = extract_separate(lower_title, ['trệt', 'trêt', 'tret'])     
-        #             if extract_result:
-        #                 return extract_result      
-        # return 1    
     
     @staticmethod
     def extract_facade_count(row):
@@ -818,7 +587,7 @@ class DataCleaner:
         if match:
             return float(match.group(1).replace(",", "."))
         else:
-            return float(round(construction_area * num_floors, 2))
+            return float(round(construction_area * num_floors, 2)) 
 
     @staticmethod 
     def extract_adjacent_lane_width(row): 
