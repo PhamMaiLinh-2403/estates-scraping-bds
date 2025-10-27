@@ -891,6 +891,9 @@ class DataImputer:
         
         if pd.notna(row.get('Khoảng cách tới trục đường chính (m)')):
             return row['Khoảng cách tới trục đường chính (m)']
+        
+        if DataCleaner._is_on_main_road(row.get("description")) == "Mặt phố":
+            return 0 
 
         lat, lon = row.get('latitude'), row.get('longitude')
         if pd.isna(lat) or pd.isna(lon):
