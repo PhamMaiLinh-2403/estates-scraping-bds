@@ -2,6 +2,7 @@ import re
 import json
 import time 
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 import requests
 import random
@@ -801,122 +802,137 @@ class DataImputer:
             return DataImputer._graph_cache[key]
 
         try:
-            G = ox.graph_from_point((lat, lon), dist=radius, network_type='drive')
+            G = ox.graph_from_point((lat, lon), dist=radius, network_type="drive")
             DataImputer._graph_cache[key] = G
             return G
         except Exception as e:
             print(f"OSMnx graph fetch failed for ({lat}, {lon}): {e}")
             return None
 
+    @staticmethod
     def _distance_to_named_street(lat, lon, street_name, radius_m=500):
         """
-        Compute distance (m) from a point to a main road
-        ignoring alleys/side lanes (hẻm, ngõ, ngách...).
+        Compute distance (m) from a point to a street with the given name,
+        ignoring alleys or side lanes (hẻm, ngõ, ngách...).
         """
-        # Load cached graph
         G = DataImputer._get_cached_graph(lat, lon, radius_m)
         if G is None:
             return None
 
         try:
-            # Convert to GeoDataFrame
             gdf_edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
-            roads = gdf_edges[gdf_edges['name'].notna()].copy()
+            roads = gdf_edges[gdf_edges["name"].notna()].copy()
             if roads.empty:
                 return None
 
-            # Filter by name (case insensitive)
-            roads = roads[roads['name'].str.lower().str.contains(street_name.lower(), na=False)]
+            # Filter by name (case-insensitive)
+            roads = roads[roads["name"].str.lower().str.contains(street_name.lower(), na=False)]
             if roads.empty:
                 return None
 
-            # Exclude alleys/hẻm/ngõ/ngách
-            pattern = r"\b(?:hẻm|hem|ngách|ngõ|ngo|alley|hẻm\s*\d+|ngách\s*\d+)\b"
-            roads = roads[~roads['name'].str.lower().str.contains(pattern, flags=re.IGNORECASE, na=False)]
+            # Exclude alleys and small lanes
+            pattern = r"\b(?:hẻm|hem|ngách|ngõ|ngo|alley|ngõ\s*\d+|hẻm\s*\d+|ngách\s*\d+)\b"
+            roads = roads[~roads["name"].str.lower().str.contains(pattern, flags=re.IGNORECASE, na=False)]
             if roads.empty:
                 return None
 
-            # Project to metric CRS 
+            # Reproject for accurate meter-based distance
             roads_proj = roads.to_crs(epsg=3857)
             point_proj = ox.projection.project_geometry(Point(lon, lat), to_crs=roads_proj.crs)[0]
 
-            # Compute distance to nearest segment
             roads_proj["dist"] = roads_proj.distance(point_proj)
             nearest = roads_proj.loc[roads_proj["dist"].idxmin()]
+            min_dist_m = nearest["dist"]
 
-            return {
-                "street_name": nearest.get("name"),
-                "distance_m": round(nearest["dist"], 2)
-            }
+            # If already on or very close to the road
+            if min_dist_m <= 5:
+                return {"street_name": nearest.get("name"), "distance_m": 0.0}
+
+            return {"street_name": nearest.get("name"), "distance_m": round(min_dist_m, 1)}
 
         except Exception as e:
             print(f"Distance computation failed for {street_name}: {e}")
             return None
 
     @staticmethod
+    def _distance_to_main_road(lat, lon, radius_m=800):
+        """
+        Compute distance to the nearest major road (by highway tag).
+        """
+        G = DataImputer._get_cached_graph(lat, lon, radius_m)
+        if G is None:
+            return None
+
+        try:
+            gdf_edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
+            if gdf_edges.empty:
+                return None
+
+            main_tags = ["motorway", "trunk", "primary", "secondary", "tertiary"]
+            main_roads = gdf_edges[gdf_edges["highway"].apply(
+                lambda h: any(tag in (h if isinstance(h, list) else [h]) for tag in main_tags)
+            )]
+
+            if main_roads.empty:
+                return None
+
+            main_roads = main_roads.to_crs(epsg=3857)
+            point_proj = gpd.GeoSeries([Point(lon, lat)], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
+
+            min_dist_m = main_roads.distance(point_proj).min()
+            return round(min_dist_m, 1)
+
+        except Exception as e:
+            print(f"Main-road distance computation failed: {e}")
+            return None
+
+    @staticmethod
     def fill_missing_distance_to_the_main_road(row):
         """
-        Fill 'Khoảng cách tới trục đường chính (m)' using a street search.
+        Fill 'Khoảng cách tới trục đường chính (m)'.
         """
+
         def normalize_street_name(name: str) -> str:
-            """
-            Normalize Vietnamese street names for OSM matching.
-            Removes common prefixes like 'Đường', 'Phố', 'Đại lộ', etc.
-            Also lowercases and trims extra spaces.
-            """
+            """Normalize Vietnamese street names for OSM matching."""
             if not isinstance(name, str) or not name.strip():
                 return ""
-
-            # Remove common Vietnamese prefixes
             prefixes = [
-                r"\bđường\b",
-                r"\bphố\b",
-                r"\bđại\s*lộ\b",
-                r"\btỉnh\s*lộ\b",
-                r"\bquốc\s*lộ\b",
-                r"\bql\d+\b",     
-                r"\bhẻm\b",
-                r"\bngách\b",
-                r"\bngõ\b",
-                r"\bhẻm\b"
+                r"\bđường\b", r"\bphố\b", r"\bđại\s*lộ\b", r"\btỉnh\s*lộ\b",
+                r"\bquốc\s*lộ\b", r"\bql\d+\b", r"\bhẻm\b", r"\bngách\b", r"\bngõ\b"
             ]
+            cleaned = re.sub(r"^(?:" + "|".join(prefixes) + r")\s*", "", name, flags=re.IGNORECASE).strip()
+            return re.sub(r"\s+", " ", cleaned).lower()
 
-            # Build regex
-            pattern = r"^(?:" + "|".join(prefixes) + r")\s*"
-            cleaned = re.sub(pattern, "", name, flags=re.IGNORECASE).strip()
+        # Already has distance
+        if pd.notna(row.get("Khoảng cách tới trục đường chính (m)")):
+            return row["Khoảng cách tới trục đường chính (m)"]
 
-            # Remove multiple spaces
-            cleaned = re.sub(r"\s+", " ", cleaned)
-            return cleaned.lower()
-        
-        if pd.notna(row.get('Khoảng cách tới trục đường chính (m)')):
-            return row['Khoảng cách tới trục đường chính (m)']
-        
+        # If explicitly “mặt phố”
         if DataCleaner._is_on_main_road(row.get("description")) == "Mặt phố":
-            return 0 
+            return 0
 
-        lat, lon = row.get('latitude'), row.get('longitude')
+        lat, lon = row.get("latitude"), row.get("longitude")
         if pd.isna(lat) or pd.isna(lon):
             return None
 
         street_name = row.get("Đường phố")
-
-        if not street_name or pd.isna(street_name):
-            fallback = random.randint(20, 200)
-            print(f"No street name for ({lat}, {lon}) → fallback {fallback}m.")
-            return fallback
-        else:
+        if isinstance(street_name, str) and street_name.strip():
             street_name = normalize_street_name(street_name)
+            result = DataImputer._distance_to_named_street(lat, lon, street_name)
+            if result:
+                print(f"{street_name}: {result['distance_m']} m (named street)")
+                return result["distance_m"]
 
-        result = DataImputer._distance_to_named_street(lat, lon, street_name)
-        if result:
-            print(f"{street_name}: {result['distance_m']} m")
-            return result["distance_m"]
+        # Fallback to OSM main-road tags
+        dist_main = DataImputer._distance_to_main_road(lat, lon)
+        if dist_main is not None:
+            print(f"Main-road fallback: {dist_main} m")
+            return dist_main
 
+        # Random fallback
         fallback = random.randint(20, 200)
-        print(f"No OSM match for '{street_name}' → fallback {fallback}m")
+        print(f"No OSM or named match → fallback {fallback}m")
         return fallback
-            
 
 class FeatureEngineer:
     @staticmethod
