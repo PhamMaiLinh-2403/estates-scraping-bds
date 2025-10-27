@@ -7,6 +7,7 @@ import requests
 import random
 from rapidfuzz import fuzz, process
 from math import * 
+from geopy.geocoders import Nominatim
 
 import osmnx as ox
 import shapely.geometry as geom
@@ -83,7 +84,7 @@ class DataCleaner:
         return cleaned
     
     @staticmethod
-    def _is_on_main_road(text: str):
+    def _is_on_main_road(text: str, lat, lon):
         text = DataCleaner.clean_description_text(text.lower().strip())
 
         not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
@@ -94,6 +95,15 @@ class DataCleaner:
         elif re.search(rf'(?:cách|ra|gần|sát)(?:\s+\w+){{0,5}}\s+(?:{major_roads})', text, re.IGNORECASE):
             return "Mặt ngõ"
         return "Mặt phố"
+    
+        # geolocator = Nominatim(user_agent="vn_address_distance")
+        # if lat is not None and lon is not None:
+        #     lat, lon = float(lat), float(lon)
+        #     location = geolocator.reverse((lat, lon), language="vi")
+        #     address = location.address.lower()
+        #     for loc in ["ngõ", "hẻm", "ngách", "ng."]:
+        #         if loc in address:
+        #             return "Mặt ngõ"
 
     # -- Static Cleaning Methods -- 
     @staticmethod
@@ -587,7 +597,9 @@ class DataCleaner:
         if match:
             return float(match.group(1).replace(",", "."))
         else:
-            return float(round(construction_area * num_floors, 2)) 
+            if construction_area is not None and num_floors is not None:
+                return float(round(construction_area * num_floors, 2)) 
+            return None 
 
     @staticmethod 
     def extract_adjacent_lane_width(row): 
