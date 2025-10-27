@@ -28,7 +28,7 @@ MAX_WORKERS = 2
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": True,
     "start_index": 0,
-    "count": 1000,
+    "count": 3000,
     "stagger_mode": "random",
     "stagger_step_sec": 3.0,
     "stagger_max_sec": 3.0,

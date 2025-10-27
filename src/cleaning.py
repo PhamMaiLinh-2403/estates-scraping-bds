@@ -810,9 +810,14 @@ class DataImputer:
         try:
             edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
             major_roads = edges[edges['highway'].isin([
-                'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'service'
+                'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'service',
+                'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'
             ])]
-            return major_roads
+            print(f"Filtered to {len(major_roads)} major roads.")
+            if major_roads.empty:
+                print("No major roads found in radius.")
+            else:
+                return major_roads
         except Exception as e:
             print(f"Failed to convert graph to GDF: {e}")
             return None
@@ -827,7 +832,7 @@ class DataImputer:
         if pd.notna(row.get('Khoảng cách tới trục đường chính (m)')):
             return row['Khoảng cách tới trục đường chính (m)']
 
-        lat, lon = row.get('latitude'), row.get('longitude')
+        lat, lon = float(row.get('latitude')), float(row.get('longitude'))
         if pd.isna(lat) or pd.isna(lon):
             return None
 
@@ -836,18 +841,18 @@ class DataImputer:
             fallback = random.randint(10, 200)
             print(f"Using fallback random distance: {fallback}m for lat={lat}, lon={lon}")
             return fallback
-
-        try:
-            pt = geom.Point(lon, lat)
-            nearest_geom = nearest_points(pt, major_roads.unary_union)[1]
-            nearest_coords = (nearest_geom.y, nearest_geom.x)
-            distance = geodesic((lat, lon), nearest_coords).meters
-            time.sleep(0.05)  
-            return round(distance, 2)
-        except Exception as e:
-            fallback = random.randint(10, 200)
-            print(f"Distance calc failed: {e}. Fallback {fallback}m")
-            return fallback
+        else:
+            try:
+                pt = geom.Point(lon, lat)
+                nearest_geom = nearest_points(pt, major_roads.unary_union)[1]
+                nearest_coords = (nearest_geom.y, nearest_geom.x)
+                distance = geodesic((lat, lon), nearest_coords).meters
+                time.sleep(0.05)  
+                return round(distance, 2)
+            except Exception as e:
+                fallback = random.randint(10, 200)
+                print(f"Distance calc failed: {e}. Fallback {fallback}m")
+                return fallback
             
 
 class FeatureEngineer:
