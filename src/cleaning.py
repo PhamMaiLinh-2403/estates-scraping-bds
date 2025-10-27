@@ -10,7 +10,7 @@ from math import *
 from geopy.geocoders import Nominatim
 
 import osmnx as ox
-import shapely.geometry as geom
+from shapely.geometry import Point
 from shapely.ops import nearest_points
 from geopy.distance import geodesic
 
@@ -84,7 +84,7 @@ class DataCleaner:
         return cleaned
     
     @staticmethod
-    def _is_on_main_road(text: str, lat, lon):
+    def _is_on_main_road(text: str):
         text = DataCleaner.clean_description_text(text.lower().strip())
 
         not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
@@ -747,7 +747,7 @@ class DataCleaner:
                         return result
                     return float(greedy_matches.group(1).replace('m', '').replace(',', '.'))
             
-        return random.randint(10, 200)
+        return None 
 
 
 class DataImputer:
@@ -792,12 +792,11 @@ class DataImputer:
         return length 
 
     @staticmethod
-    def _get_cached_graph(lat, lon, radius=300):
+    def _get_cached_graph(lat, lon, radius=500):
         """
         Retrieve a cached OSMnx graph if nearby, otherwise download a new one.
         """
-        key = (lat, lon, radius)
-
+        key = (round(lat, 4), round(lon, 4), radius)
         if key in DataImputer._graph_cache:
             return DataImputer._graph_cache[key]
 
@@ -806,65 +805,114 @@ class DataImputer:
             DataImputer._graph_cache[key] = G
             return G
         except Exception as e:
-            print(f"OSMnx graph fetch failed: {e}")
+            print(f"OSMnx graph fetch failed for ({lat}, {lon}): {e}")
             return None
 
-    @staticmethod
-    def _query_osmnx_for_roads(lat, lon, radius=300):
+    def _distance_to_named_street(lat, lon, street_name, radius_m=500):
         """
-        Helper function to get major roads near a point using OSMnx.
-        Returns a GeoDataFrame of filtered roads or None if download fails.
+        Compute distance (m) from a point to a main road
+        ignoring alleys/side lanes (hẻm, ngõ, ngách...).
         """
-        G = DataImputer._get_cached_graph(lat, lon, radius)
+        # Load cached graph
+        G = DataImputer._get_cached_graph(lat, lon, radius_m)
         if G is None:
             return None
 
         try:
-            edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
-            major_roads = edges[edges['highway'].isin([
-                'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'service',
-                'trunk_link', 'primary_link', 'secondary_link', 'tertiary_link'
-            ])]
-            print(f"Filtered to {len(major_roads)} major roads.")
-            if major_roads.empty:
-                print("No major roads found in radius.")
-            else:
-                return major_roads
+            # Convert to GeoDataFrame
+            gdf_edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
+            roads = gdf_edges[gdf_edges['name'].notna()].copy()
+            if roads.empty:
+                return None
+
+            # Filter by name (case insensitive)
+            roads = roads[roads['name'].str.lower().str.contains(street_name.lower(), na=False)]
+            if roads.empty:
+                return None
+
+            # Exclude alleys/hẻm/ngõ/ngách
+            pattern = r"\b(?:hẻm|hem|ngách|ngõ|ngo|alley|hẻm\s*\d+|ngách\s*\d+)\b"
+            roads = roads[~roads['name'].str.lower().str.contains(pattern, flags=re.IGNORECASE, na=False)]
+            if roads.empty:
+                return None
+
+            # Project to metric CRS 
+            roads_proj = roads.to_crs(epsg=3857)
+            point_proj = ox.projection.project_geometry(Point(lon, lat), to_crs=roads_proj.crs)[0]
+
+            # Compute distance to nearest segment
+            roads_proj["dist"] = roads_proj.distance(point_proj)
+            nearest = roads_proj.loc[roads_proj["dist"].idxmin()]
+
+            return {
+                "street_name": nearest.get("name"),
+                "distance_m": round(nearest["dist"], 2)
+            }
+
         except Exception as e:
-            print(f"Failed to convert graph to GDF: {e}")
+            print(f"Distance computation failed for {street_name}: {e}")
             return None
 
     @staticmethod
     def fill_missing_distance_to_the_main_road(row):
         """
-        Fills missing distance to main road by calculating 
-        distance from property's coordinates to the nearest major road.
-        Uses OSMnx with caching.
+        Fill 'Khoảng cách tới trục đường chính (m)' using a street search.
         """
+        def normalize_street_name(name: str) -> str:
+            """
+            Normalize Vietnamese street names for OSM matching.
+            Removes common prefixes like 'Đường', 'Phố', 'Đại lộ', etc.
+            Also lowercases and trims extra spaces.
+            """
+            if not isinstance(name, str) or not name.strip():
+                return ""
+
+            # Remove common Vietnamese prefixes
+            prefixes = [
+                r"\bđường\b",
+                r"\bphố\b",
+                r"\bđại\s*lộ\b",
+                r"\btỉnh\s*lộ\b",
+                r"\bquốc\s*lộ\b",
+                r"\bql\d+\b",     
+                r"\bhẻm\b",
+                r"\bngách\b",
+                r"\bngõ\b",
+                r"\bhẻm\b"
+            ]
+
+            # Build regex
+            pattern = r"^(?:" + "|".join(prefixes) + r")\s*"
+            cleaned = re.sub(pattern, "", name, flags=re.IGNORECASE).strip()
+
+            # Remove multiple spaces
+            cleaned = re.sub(r"\s+", " ", cleaned)
+            return cleaned.lower()
+        
         if pd.notna(row.get('Khoảng cách tới trục đường chính (m)')):
             return row['Khoảng cách tới trục đường chính (m)']
 
-        lat, lon = float(row.get('latitude')), float(row.get('longitude'))
+        lat, lon = row.get('latitude'), row.get('longitude')
         if pd.isna(lat) or pd.isna(lon):
             return None
 
-        major_roads = DataImputer._query_osmnx_for_roads(lat, lon)
-        if major_roads is None or major_roads.empty:
-            fallback = random.randint(10, 200)
-            print(f"Using fallback random distance: {fallback}m for lat={lat}, lon={lon}")
+        street_name = row.get("Đường phố")
+
+        if not street_name or pd.isna(street_name):
+            fallback = random.randint(20, 200)
+            print(f"No street name for ({lat}, {lon}) → fallback {fallback}m.")
             return fallback
         else:
-            try:
-                pt = geom.Point(lon, lat)
-                nearest_geom = nearest_points(pt, major_roads.unary_union)[1]
-                nearest_coords = (nearest_geom.y, nearest_geom.x)
-                distance = geodesic((lat, lon), nearest_coords).meters
-                time.sleep(0.05)  
-                return round(distance, 2)
-            except Exception as e:
-                fallback = random.randint(10, 200)
-                print(f"Distance calc failed: {e}. Fallback {fallback}m")
-                return fallback
+            street_name = normalize_street_name(street_name)
+
+        result = DataImputer._distance_to_named_street(lat, lon, street_name)
+        if result:
+            print(f"{street_name}: {result['distance_m']} m")
+            return result["distance_m"]
+
+        fallback = random.randint(20, 200)
+        print(f"No OSM match for '{street_name}' → fallback {fallback}m")
+        return fallback
             
 
 class FeatureEngineer:
