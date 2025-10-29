@@ -85,8 +85,10 @@ class DataCleaner:
         return cleaned
     
     @staticmethod
-    def _is_on_main_road(text: str):
+    def _is_on_main_road(text: str, lat, lon):
         text = DataCleaner.clean_description_text(text.lower().strip())
+
+        geolocator = Nominatim(user_agent="vn_address_distance")
 
         not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
         major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|cầu|ngã tư|ngã ba|ngã 4|ngã 3|nhà'
@@ -95,16 +97,15 @@ class DataCleaner:
             return "Mặt ngõ"
         elif re.search(rf'(?:cách|ra|gần|sát)(?:\s+\w+){{0,5}}\s+(?:{major_roads})', text, re.IGNORECASE):
             return "Mặt ngõ"
+        elif lat is not None and lon is not None:
+            lat, lon = float(lat), float(lon)
+            location = geolocator.reverse((lat, lon), language="vi")
+            address = location.address.lower()
+            for loc in ["ngõ", "hẻm", "ngách"]:
+                if loc in address:
+                    return "Mặt ngõ"
+
         return "Mặt phố"
-    
-        # geolocator = Nominatim(user_agent="vn_address_distance")
-        # if lat is not None and lon is not None:
-        #     lat, lon = float(lat), float(lon)
-        #     location = geolocator.reverse((lat, lon), language="vi")
-        #     address = location.address.lower()
-        #     for loc in ["ngõ", "hẻm", "ngách", "ng."]:
-        #         if loc in address:
-        #             return "Mặt ngõ"
 
     # -- Static Cleaning Methods -- 
     @staticmethod
@@ -201,6 +202,7 @@ class DataCleaner:
         short_address = str(row.get("short_address", "")).strip()
         text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
         parts = [p.strip() for p in short_address.split(",") if pd.notna(p) and isinstance(p, str)]
+        lat, lon = row.get("latitude", ""), row.get("longitude", "")
         address_details = []
         ignore_prefixes = ['đường', 'phố', 'phường', 'quận', 'huyện']
 
@@ -228,7 +230,7 @@ class DataCleaner:
             )
         ):
             return parts[0]
-        return DataCleaner._is_on_main_road(text)
+        return DataCleaner._is_on_main_road(text, lat, lon)
             
     @staticmethod
     def extract_total_area(row):
@@ -682,11 +684,13 @@ class DataCleaner:
                 num_val = None
 
         text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
+        lat, lon = row.get("latitude", ""), row.get("longitude", "")
+
         if num_val is not None and num_val >= 50:
             return num_val
         elif pd.notna(text):
             # TH1: Nhà nằm trên mặt phố 
-            if DataCleaner._is_on_main_road(text) == "Mặt phố":
+            if DataCleaner._is_on_main_road(text, lat, lon) == "Mặt phố":
                 return 0 
             
             # TH2: Ước lượng gần phố (nhà, bước chân, phút,...)
@@ -944,10 +948,6 @@ class DataImputer:
         # Already has distance
         if pd.notna(row.get("Khoảng cách tới trục đường chính (m)")):
             return row["Khoảng cách tới trục đường chính (m)"]
-
-        # If explicitly “mặt phố”
-        if DataCleaner._is_on_main_road(row.get("description")) == "Mặt phố":
-            return 0
 
         lat, lon = row.get("latitude"), row.get("longitude")
         if pd.isna(lat) or pd.isna(lon):
