@@ -92,6 +92,7 @@ class DataCleaner:
 
         not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
         major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|cầu|ngã tư|ngã ba|ngã 4|ngã 3|nhà'
+        on_main_road = "\b(?:ngay|trên|nằm)?\s*(?:mặt tiền|mặt phố|mặt đường|phố|đường)\b"
 
         if re.search(not_on_main_road, text):
             return "Mặt ngõ"
@@ -104,8 +105,11 @@ class DataCleaner:
             for loc in ["ngõ", "hẻm", "ngách"]:
                 if loc in address:
                     return "Mặt ngõ"
+                else:
+                    if re.search(on_main_road, text) or "nhà phố" in text.lower():
+                        return "Mặt phố"
 
-        return "Mặt phố"
+        return None
 
     # -- Static Cleaning Methods -- 
     @staticmethod
