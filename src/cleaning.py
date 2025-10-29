@@ -755,23 +755,61 @@ class DataImputer:
     _graph_cache = {}
 
     @staticmethod
-    def fill_missing_width(row):
+    def fill_missing_width(df: pd.DataFrame) -> pd.DataFrame:
         """
-        Fills missing width by taking the square root of the construction area.
-        Uses the already calculated 'Diện tích xây dựng' column.
+        Fill missing width by looking up in a ground truth file.
         """
-        width = row.get("Kích thước mặt tiền (m)")
+        target_col = 'Kích thước mặt tiền (m)'
 
-        if pd.isna(width):
-            # Get the construction area from the column that was already computed in main.py
-            construction_area = row.get('Diện tích xây dựng')
-            
-            # Ensure construction_area is a valid number before calculating
-            if pd.notna(construction_area) and construction_area > 0:
-                return round(float(construction_area) ** 0.5, 2)
+        try:
+            ground_truth = pd.read_excel(INFO_FILE)
+            print(f"Loaded ground truth file successfully from: {INFO_FILE}")
+        except FileNotFoundError:
+            print(f"Ground truth file not found.")
+            return df
         
-        # If width is not missing, or if it cannot be imputed, return the original value.
-        return width 
+        required_cols = ['Tỉnh/Thành phố', 'Diện tích (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài']
+        if not all(col in ground_truth.columns for col in required_cols):
+            print(f"Missing columns in ground truth file: {required_cols}.")
+            return df
+
+        ground_truth.dropna(subset=required_cols, inplace=True)
+        ground_truth = ground_truth[(ground_truth[target_col] > 0) & (ground_truth['Kích thước mặt tiền (m)'] > 0)]
+
+        if ground_truth.empty:
+            print("Cảnh báo: Không có dữ liệu hợp lệ trong file ground truth sau khi làm sạch. Bỏ qua.")
+            return df
+
+        df_imputed = df.copy()
+        rows_to_impute = df_imputed[df_imputed[target_col].isna()].index
+
+        for index in rows_to_impute:
+            row = df_imputed.loc[index]
+            target_province = row['Tỉnh/Thành phố']
+            target_area = row['Diện tích đất (m2)']
+
+            if pd.isna(target_province) or pd.isna(target_area):
+                continue
+
+            # 1. Filter ground truth file based on locations 
+            gt_province_subset = ground_truth[ground_truth['Tỉnh/Thành phố'] == target_province].copy()
+            
+            if gt_province_subset.empty:
+                continue
+
+            # 2. Look up the estate with closest area
+            gt_province_subset.loc[:, 'area_diff'] = (gt_province_subset['Diện tích (m2)'] - target_area).abs()
+            best_match = gt_province_subset.loc[gt_province_subset['area_diff'].idxmin()]
+            gt_width = best_match['Kích thước mặt tiền (m)']
+            gt_length = best_match['Kích thước chiều dài']
+
+            # 3. Calculate the width from the ground truth estate's shape ratio 
+            shape_ratio = gt_width / gt_length
+            imputed_width = (target_area * shape_ratio) ** 0.5
+            df_imputed.loc[index, target_col] = round(imputed_width, 2)
+            imputed_count += 1
+
+        return df_imputed
 
     @staticmethod
     def fill_missing_length(row):

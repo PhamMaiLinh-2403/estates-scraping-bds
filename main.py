@@ -12,7 +12,6 @@ from src.scraping import Scraper
 from src.utils import *
 from src.cleaning import DataCleaner, DataImputer, FeatureEngineer
 from src.address_standardizer import AddressStandardizer
-from src.modelling import *
 
 
 def run_scrape_urls():
@@ -152,7 +151,7 @@ def clean_details():
 
     # 3. Imputing missing values
     print("Start imputing missing values...")
-    df['Kích thước mặt tiền (m)'] = df.apply(DataImputer.fill_missing_width, axis=1)
+    df = DataImputer.fill_missing_width(df)
     df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
     # df["Khoảng cách tới trục đường chính (m)"] = df.apply(DataImputer.fill_missing_distance_to_the_main_road, axis=1)
 
