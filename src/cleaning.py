@@ -934,88 +934,88 @@ class DataImputer:
         print(f"No OSM or named match → fallback {fallback}m")
         return fallback
     
-    @staticmethod
-    def fill_missing_adjacent_lane_width_for_large_dataset(df):
-        """
-        Fill missing adjacent lane width by using proxy price classified by location. 
-        Large dataset remix. 
-        """
-        target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
-        proxy_col = 'Đơn giá đất'
-        location_hierarchy = [
-            'Đường phố', 
-            'Xã/Phường/Thị trấn', 
-            'Thành phố/Quận/Huyện/Thị xã', 
-            'Tỉnh/Thành phố'
-        ] # from most detailed to most general 
+    # @staticmethod
+    # def fill_missing_adjacent_lane_width_for_large_dataset(df):
+    #     """
+    #     Fill missing adjacent lane width by using proxy price classified by location. 
+    #     Large dataset remix. 
+    #     """
+    #     target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
+    #     proxy_col = 'Đơn giá đất'
+    #     location_hierarchy = [
+    #         'Đường phố', 
+    #         'Xã/Phường/Thị trấn', 
+    #         'Thành phố/Quận/Huyện/Thị xã', 
+    #         'Tỉnh/Thành phố'
+    #     ] # from most detailed to most general 
 
-        df_onehousing = pd.read_excel(ONEHOUSING_FILE, header=True)
-        df_imputed = df.copy()
+    #     df_onehousing = pd.read_excel(ONEHOUSING_FILE, header=True)
+    #     df_imputed = df.copy()
 
-        # Concat the data from OneHousing to have a bigger data lake to look up the price 
-        df_filtered = df_onehousing[df_imputed.columns.intersection(df_imputed.columns)]
-        result = pd.concat([df_imputed, df_filtered], ignore_index=True)
-        df_known = result[result[target_col].notna() & result[proxy_col].notna()].copy()
+    #     # Concat the data from OneHousing to have a bigger data lake to look up the price 
+    #     df_filtered = df_onehousing[df_imputed.columns.intersection(df_imputed.columns)]
+    #     result = pd.concat([df_imputed, df_filtered], ignore_index=True)
+    #     df_known = result[result[target_col].notna() & result[proxy_col].notna()].copy()
 
-        if len(df_known) < 20: # Minimum threshold to infer the adjacent lane width from price 
-            print("Warning: Not enough data. Skipping...")
-            return df
+    #     if len(df_known) < 20: # Minimum threshold to infer the adjacent lane width from price 
+    #         print("Warning: Not enough data. Skipping...")
+    #         return df
         
-        # 1. Split the adjacent lane width into different bins 
-        bins = [0, 2, 3.5, 5, float('inf')]
-        labels = ['Ngách/Hẻm', 'Ngõ nhỏ', 'Ngõ lớn', 'Đường chính']
-        df_known['width_category'] = pd.cut(df_known[target_col], bins=bins, labels=labels, right=False)
+    #     # 1. Split the adjacent lane width into different bins 
+    #     bins = [0, 2, 3.5, 5, float('inf')]
+    #     labels = ['Ngách/Hẻm', 'Ngõ nhỏ', 'Ngõ lớn', 'Đường chính']
+    #     df_known['width_category'] = pd.cut(df_known[target_col], bins=bins, labels=labels, right=False)
 
-        # 2. Calculate the median price for each location level 
-        medians_cache = {}
-        for i in range(len(location_hierarchy) + 1):
-            group_cols = location_hierarchy[i:] + ['width_category']
-            group_cols = [col for col in group_cols if col != 'width_category' and col in df_known.columns] + ['width_category']
-            level_name = "_".join(location_hierarchy[i:]) if i < len(location_hierarchy) else "global"
-            medians_cache[level_name] = df_known.groupby(group_cols, observed=True)[proxy_col].median()
+    #     # 2. Calculate the median price for each location level 
+    #     medians_cache = {}
+    #     for i in range(len(location_hierarchy) + 1):
+    #         group_cols = location_hierarchy[i:] + ['width_category']
+    #         group_cols = [col for col in group_cols if col != 'width_category' and col in df_known.columns] + ['width_category']
+    #         level_name = "_".join(location_hierarchy[i:]) if i < len(location_hierarchy) else "global"
+    #         medians_cache[level_name] = df_known.groupby(group_cols, observed=True)[proxy_col].median()
 
-        representative_widths = {
-            'Ngách/Hẻm': 1.5, 'Ngõ nhỏ': 3,
-            'Ngõ lớn': 4.0, 'Đường chính': 7.0 
-        }
+    #     representative_widths = {
+    #         'Ngách/Hẻm': 1.5, 'Ngõ nhỏ': 3,
+    #         'Ngõ lớn': 4.0, 'Đường chính': 7.0 
+    #     }
 
-        def _find_best_width(row):
-            """
-            Function to find the best adjacent lane width. 
-            """
-            price_to_compare = row[proxy_col]
-            if pd.isna(price_to_compare):
-                return None
+    #     def _find_best_width(row):
+    #         """
+    #         Function to find the best adjacent lane width. 
+    #         """
+    #         price_to_compare = row[proxy_col]
+    #         if pd.isna(price_to_compare):
+    #             return None
 
-            # Iterate through the location hierarchy 
-            for i in range(len(location_hierarchy) + 1):
-                level_name = "_".join(location_hierarchy[i:]) if i < len(location_hierarchy) else "global"
+    #         # Iterate through the location hierarchy 
+    #         for i in range(len(location_hierarchy) + 1):
+    #             level_name = "_".join(location_hierarchy[i:]) if i < len(location_hierarchy) else "global"
                 
-                # # Create a key to look up price in the cache 
-                loc_key = tuple(row[col] for col in location_hierarchy[i:] if col in row.index)
-                current_medians = medians_cache[level_name]
+    #             # # Create a key to look up price in the cache 
+    #             loc_key = tuple(row[col] for col in location_hierarchy[i:] if col in row.index)
+    #             current_medians = medians_cache[level_name]
 
-                try:
-                    if level_name != "global":
-                        local_price_medians = current_medians.loc[loc_key]
-                    else:
-                        local_price_medians = current_medians 
+    #             try:
+    #                 if level_name != "global":
+    #                     local_price_medians = current_medians.loc[loc_key]
+    #                 else:
+    #                     local_price_medians = current_medians 
 
-                    if not local_price_medians.empty and local_price_medians.notna().any():
-                        distances = (local_price_medians - price_to_compare).abs()
-                        closest_category = distances.idxmin()
-                        return representative_widths[closest_category]
-                except (KeyError, TypeError):
-                    continue
+    #                 if not local_price_medians.empty and local_price_medians.notna().any():
+    #                     distances = (local_price_medians - price_to_compare).abs()
+    #                     closest_category = distances.idxmin()
+    #                     return representative_widths[closest_category]
+    #             except (KeyError, TypeError):
+    #                 continue
             
-            return None 
+    #         return None 
         
-        # 4. Fill in missing values 
-        impute_mask = df_imputed[target_col].isna() & df_imputed[proxy_col].notna()
-        imputed_values = df_imputed[impute_mask].apply(_find_best_width, axis=1)
-        df_imputed.loc[impute_mask, target_col] = imputed_values 
-        print(f"Successfully filled in {imputed_values.notna().sum()} missing adjacent lane width values.")
-        return df_imputed
+    #     # 4. Fill in missing values 
+    #     impute_mask = df_imputed[target_col].isna() & df_imputed[proxy_col].notna()
+    #     imputed_values = df_imputed[impute_mask].apply(_find_best_width, axis=1)
+    #     df_imputed.loc[impute_mask, target_col] = imputed_values 
+    #     print(f"Successfully filled in {imputed_values.notna().sum()} missing adjacent lane width values.")
+    #     return df_imputed
 
 
 class FeatureEngineer:

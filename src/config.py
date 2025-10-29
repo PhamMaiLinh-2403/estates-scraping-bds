@@ -27,8 +27,8 @@ MAX_WORKERS = 2
 # Scraping details configuration
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": True,
-    "start_index": 0,
-    "count": 3000,
+    "start_index": 3001,
+    "count": 1000,
     "stagger_mode": "random",
     "stagger_step_sec": 3.0,
     "stagger_max_sec": 3.0,
@@ -41,19 +41,18 @@ PAGE_NUMBER = 1  # Starting page number for scraping
 
 # File path settings
 OUTPUT_DIR = "output"
-DATA_DIR = "data"
 URLS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_urls.csv"
 DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details.csv"
 CLEANED_DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details_cleaned.xlsx"
-ONEHOUSING_FILE = f"{DATA_DIR}/onehousing_data.xlsx"
 
 # Administrative data paths
 ADMIN_DATA_DIR = "Dữ liệu địa giới hành chính"
+INFO_DATA_DIR = "Dữ liệu thông tin kỹ thuật tài sản"
 PROVINCES_SQL_FILE = f"{ADMIN_DATA_DIR}/provinces_20250225_2.sql"
 DISTRICTS_SQL_FILE = f"{ADMIN_DATA_DIR}/districts_20250225_2.sql"
 WARDS_SQL_FILE = f"{ADMIN_DATA_DIR}/wards_20250225_2.sql"
 STREETS_SQL_FILE = f"{ADMIN_DATA_DIR}/streets_20250225_2.sql"
-
+INFO_FILE = f"{INFO_DATA_DIR}/Dữ liệu thông tin kỹ thuật tài sản.xlsx"
 
 # -- Word maps for cleaning -- 
 FACADE_COUNT_MAP = [
