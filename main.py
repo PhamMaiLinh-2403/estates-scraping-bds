@@ -212,52 +212,15 @@ def clean_details():
     final_df.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Successfully saved {len(final_df)} cleaned rows into {config.CLEANED_DETAILS_OUTPUT_FILE}")
 
-def run_modelling():
-    """Step 4: Predict missing values and finalize the dataset."""
-    if not os.path.exists(config.CLEANED_DETAILS_OUTPUT_FILE):
-        print("Cleaned details file not found. Run with `--mode clean` first.")
-        return
-
-    df = pd.read_csv(config.CLEANED_DETAILS_OUTPUT_FILE)
-
-    # 1. Add the 'Số ngày tính từ lúc đăng tin' column for the model
-    print("Calculating 'Số ngày tính từ lúc đăng tin' for modelling...")
-    df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(df['Thời điểm giao dịch/rao bán'], format='%d/%m/%Y', errors='coerce')
-    df['Số ngày tính từ lúc đăng tin'] = (pd.Timestamp.now() - df['Thời điểm giao dịch/rao bán']).dt.days
-    
-    # Fill any missing values (from date parsing errors) with the column's median
-    median_days = df['Số ngày tính từ lúc đăng tin'].median()
-    df['Số ngày tính từ lúc đăng tin'].fillna(median_days, inplace=True)
-
-    # 2. Impute missing adjacent lane width using the LightGBM model
-    print("Start predicting missing adjacent lane width...")
-    df = predict_adjacent_lane_width(df)
-
-    # 3. Drop the temporary column used for modelling
-    print("Dropping temporary modelling column...")
-    if 'Số ngày tính từ lúc đăng tin' in df.columns:
-        df.drop(columns=['Số ngày tính từ lúc đăng tin'], inplace=True)
-
-    # 4. Recalculate business advantage as it depends on the imputed values
-    print("Recalculating business advantage with imputed data...")
-    df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)\
-
-    # 5. Export the final dataset to an Excel file
-    print(f"Exporting final dataset to Excel file: {config.FINAL_OUTPUT}")
-    df.to_excel(config.FINAL_OUTPUT, index=False)
-    print(f"Successfully saved final data with {len(df)} rows to {config.FINAL_OUTPUT}")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real‑estate scraper, cleaner & feature-engineering CLI")
     parser.add_argument(
         "--mode",
-        choices=["urls", "details", "clean", "ml"],
+        choices=["urls", "details", "clean"],
         required=True,
         help="'urls' → collect listing URLs\n"
              "'details' → scrape details from URLs\n"
              "'clean' → clean scraped data\n"
-             "'ml' → run machine learning model to impute missing data"
     )
     args = parser.parse_args()
 
@@ -267,5 +230,3 @@ if __name__ == "__main__":
         run_scrape_details()
     elif args.mode == "clean":
         clean_details()
-    elif args.mode == "ml":
-        run_modelling()
