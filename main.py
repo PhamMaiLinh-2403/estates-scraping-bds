@@ -154,7 +154,7 @@ def clean_details():
     print("Start imputing missing values...")
     df['Kích thước mặt tiền (m)'] = df.apply(DataImputer.fill_missing_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
-    df["Khoảng cách tới trục đường chính (m)"] = df.apply(DataImputer.fill_missing_distance_to_the_main_road, axis=1)
+    # df["Khoảng cách tới trục đường chính (m)"] = df.apply(DataImputer.fill_missing_distance_to_the_main_road, axis=1)
 
     # 4. Create new features 
     print("Start feature engineeering...")
@@ -201,7 +201,7 @@ def clean_details():
     'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số tầng công trình',
     'Số mặt tiền tiếp giáp', 'Hình dạng', 'Chất lượng còn lại', 'Đơn giá xây dựng',
     'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất',
-    'Diện tích xây dựng', 'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)',
+    'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)',
     'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 
     'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)', 
 ]
@@ -209,7 +209,7 @@ def clean_details():
     final_df.dropna(subset=subset, inplace=True)
     
     # Export the cleaned data 
-    final_df.to_csv(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
+    final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Successfully saved {len(final_df)} cleaned rows into {config.CLEANED_DETAILS_OUTPUT_FILE}")
 
 if __name__ == "__main__":

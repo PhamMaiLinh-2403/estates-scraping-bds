@@ -44,8 +44,7 @@ OUTPUT_DIR = "output"
 DATA_DIR = "data"
 URLS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_urls.csv"
 DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details.csv"
-CLEANED_DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details_cleaned.csv"
-FINAL_OUTPUT = f"{OUTPUT_DIR}/final_output.xlsx"
+CLEANED_DETAILS_OUTPUT_FILE = f"{OUTPUT_DIR}/listing_details_cleaned.xlsx"
 ONEHOUSING_FILE = f"{DATA_DIR}/onehousing_data.xlsx"
 
 # Administrative data paths
