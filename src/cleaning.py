@@ -935,9 +935,10 @@ class DataImputer:
         return fallback
     
     @staticmethod
-    def fill_missing_adjacent_lane_width(df):
+    def fill_missing_adjacent_lane_width_for_large_dataset(df):
         """
-        Fill missing adjacent lan width by using proxy price classified by location. 
+        Fill missing adjacent lane width by using proxy price classified by location. 
+        Large dataset remix. 
         """
         target_col = 'Độ rộng ngõ/ngách nhỏ nhất (m)'
         proxy_col = 'Đơn giá đất'
