@@ -9,6 +9,7 @@ import random
 from rapidfuzz import fuzz, process
 from math import * 
 from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
 import osmnx as ox
 from shapely.geometry import Point
@@ -103,14 +104,23 @@ class DataCleaner:
             return "Mặt ngõ"
         elif lat is not None and lon is not None:
             lat, lon = float(lat), float(lon)
-            location = geolocator.reverse((lat, lon), language="vi", timeout=10)
-            address = location.address.lower()
-            for loc in ["ngõ", "hẻm", "ngách"]:
-                if loc in address:
-                    return "Mặt ngõ"
-                else:
-                    if re.search(on_main_road, text) or "nhà phố" in text.lower():
-                        return "Mặt phố"
+            try:
+                location = geolocator.reverse((lat, lon), language="vi", timeout=10)
+                print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
+                time.sleep(random.uniform(1, 2))  
+
+                if location and location.address:
+                    address = location.address.lower()
+                    for loc in ["ngõ", "hẻm", "ngách"]:
+                        if loc in address:
+                            return "Mặt ngõ"
+                
+                if re.search(on_main_road, text) or "nhà phố" in text.lower():
+                    return "Mặt phố"
+
+            except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
+                print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
+                time.sleep(1) # Wait a bit before the next request on failure
 
         return None
 
