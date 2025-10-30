@@ -718,34 +718,7 @@ class DataCleaner:
             if DataCleaner._is_on_main_road(text, lat, lon) == "Mặt phố":
                 return 0 
             
-            # TH2: Ước lượng gần phố (nhà, bước chân, phút,...)
-            major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl'
-            tertiary = 'mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|cầu|ngã tư|ngã ba|ngã 4|ngã 3|nhà'
-            landmarks = 'trường|chợ|siêu thị|vincom|aeon|lotte|công viên|cv|hẻm|hxh|ngõ|vườn|trung tâm|vinmart|winmart|vin|mall|tttm|bigc|go|gigamall|đại học|đh|bến xe|bx|ga'
-            places_of_interest = 'biển|sông|hồ|ubnd|chung cư|cc|khu đô thị|kđt|kdt|sân bay|bệnh viện|bv|quận|q(?:\d+)|thành phố|tp|huyện|thị xã|thị trấn|tx|bán kính'
-
-            # Cách bao nhiêu căn nhà ra mặt phố 
-            if re.search(rf'cách\s*(?:\S+\s*){{0,2}}nhà\s*(?:\S+\s*){{0,3}}(?:{major_roads}|{tertiary})', text): 
-                return 30 
-            
-            # Cách bao nhiêu bước chân ra phố, tới phố có bao nhiêu bước chân...
-            pattern = re.search(rf'(bước\s*(?:\S+\s*){{0,5}}ra\s*(?:{major_roads}|{tertiary}))|(cách\s*(?:\S+\s*){{0,2}}(?:{major_roads}|{tertiary})\s*(?:\S+\s*){{0,2}}bước)', text)
-            if pattern:
-                return 5
-            
-            # Cách bao nhiêu phút ra phố 
-            if re.search(rf'phút(?:\S+\s*){{0,3}}ra\s*(?:{major_roads}|{tertiary}\s*)', text):
-                return 50
-            
-            # Gần, sát, giáp phố 
-            if re.search(rf'(?:gần|giáp|sát)(?:\s+\S+){{0,2}}\s+(?:{major_roads}|{tertiary})', text):
-                return 20
-            
-            # TH3: Ngõ nông
-            if re.search(r'ngõ\s*(?:\S+\s*){0,3}(?:nông|ngắn)', text):
-                return 10
-            
-            # TH4: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
+            # TH2: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
             match_1 = re.search(rf'cách\s*(?:{major_roads})\s*(?:(?!\d{{1,3}}(?:[.,]\d+)*\s*(?:m|km))\S+\s*){{0,5}}?\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # cách đường Phạm Văn Đồng 5m, cách mặt phố Hai Bà Trưng 100m 
             match_2 = re.search(rf'\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))\s*ra\s*(?:{major_roads})\s*(?:\S+\s+){{0,5}}', text, re.IGNORECASE) # 50m ra đường Cầu Giấy
             match_3 = re.search(rf'ra\s*(?:{major_roads}|{tertiary})\s*(?:\S+\s+){{0,5}}\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # ra mặt phố cổ 20 m
@@ -777,6 +750,33 @@ class DataCleaner:
                         return result
                     return float(greedy_matches.group(1).replace('m', '').replace(',', '.'))
             
+            # TH3: Ước lượng gần phố (nhà, bước chân, phút,...)
+            major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl'
+            tertiary = 'mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|cầu|ngã tư|ngã ba|ngã 4|ngã 3|nhà'
+            landmarks = 'trường|chợ|siêu thị|vincom|aeon|lotte|công viên|cv|hẻm|hxh|ngõ|vườn|trung tâm|vinmart|winmart|vin|mall|tttm|bigc|go|gigamall|đại học|đh|bến xe|bx|ga'
+            places_of_interest = 'biển|sông|hồ|ubnd|chung cư|cc|khu đô thị|kđt|kdt|sân bay|bệnh viện|bv|quận|q(?:\d+)|thành phố|tp|huyện|thị xã|thị trấn|tx|bán kính'
+
+            # Cách bao nhiêu căn nhà ra mặt phố 
+            if re.search(rf'cách\s*(?:\S+\s*){{0,2}}nhà\s*(?:\S+\s*){{0,3}}(?:{major_roads}|{tertiary})', text): 
+                return 30 
+            
+            # Cách bao nhiêu bước chân ra phố, tới phố có bao nhiêu bước chân...
+            pattern = re.search(rf'(bước\s*(?:\S+\s*){{0,5}}ra\s*(?:{major_roads}|{tertiary}))|(cách\s*(?:\S+\s*){{0,2}}(?:{major_roads}|{tertiary})\s*(?:\S+\s*){{0,2}}bước)', text)
+            if pattern:
+                return 5
+            
+            # Cách bao nhiêu phút ra phố 
+            if re.search(rf'phút(?:\S+\s*){{0,3}}ra\s*(?:{major_roads}|{tertiary}\s*)', text):
+                return 50
+            
+            # Gần, sát, giáp phố 
+            if re.search(rf'(?:gần|giáp|sát)(?:\s+\S+){{0,2}}\s+(?:{major_roads}|{tertiary})', text):
+                return 20
+            
+            # TH4: Ngõ nông
+            if re.search(r'ngõ\s*(?:\S+\s*){0,3}(?:nông|ngắn)', text):
+                return 10
+            
         return None 
 
 
@@ -796,13 +796,8 @@ class DataImputer:
         except FileNotFoundError:
             print(f"Ground truth file not found.")
             return df
-        
-        required_cols = ['Tỉnh/Thành phố', 'Diện tích (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài']
-        if not all(col in ground_truth.columns for col in required_cols):
-            print(f"Missing columns in ground truth file: {required_cols}.")
-            return df
 
-        ground_truth.dropna(subset=required_cols, inplace=True)
+        ground_truth.dropna(inplace=True)
         ground_truth = ground_truth[(ground_truth[target_col] > 0) & (ground_truth['Kích thước mặt tiền (m)'] > 0)]
 
         if ground_truth.empty:

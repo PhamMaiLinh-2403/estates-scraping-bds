@@ -148,12 +148,12 @@ ALLEY_WIDTH = {
 
     # Ngõ xe máy tránh nhau
     "xe máy tránh": 2.5,
-    "ba gác tránh": 2.5, 
-    "3 gác tránh": 2.5, 
+    "ba gác tránh": 3.0, 
+    "3 gác tránh": 3.0, 
 
     # Ngõ ô tô 
-    "ngõ ô tô": 3.0,
-    "hẻm ô tô": 3.0,
+    "ngõ ô tô": 4.0,
+    "hẻm ô tô": 4.0,
 
 
     # Ngõ ô tô tránh nhau
