@@ -100,7 +100,7 @@ class DataCleaner:
             return "Mặt ngõ"
         elif lat is not None and lon is not None:
             lat, lon = float(lat), float(lon)
-            location = geolocator.reverse((lat, lon), language="vi")
+            location = geolocator.reverse((lat, lon), language="vi", timeout=10)
             address = location.address.lower()
             for loc in ["ngõ", "hẻm", "ngách"]:
                 if loc in address:
@@ -620,7 +620,7 @@ class DataCleaner:
         if val:
             try:
                 num_val = float(str(val).replace(",", ".").strip().split()[0])
-                if num_val <= 10:
+                if num_val <= 20:
                     return num_val
             except ValueError:
                 pass  
@@ -632,6 +632,14 @@ class DataCleaner:
         )
         if exact_match:
             return float(exact_match.group(1).replace(',', '.'))
+        
+        another_match = re.search(
+            "\b(?:trước|vào)\s+nhà\s+rộng\s+(\d+(?:[.,]\d+)?)\s*(?:m|mét)\b",
+            text,
+            re.IGNORECASE
+        )
+        if another_match:
+            return float(another_match.group(1).replace(",", "."))
             
         soft_match = re.search(
             r"\b(đường|ngõ|hẻm|ngách|kiệt)\b(?:\s+\S+){0,5}?\s*(\d+(?:[.,]\d+)?)(?=\s*(m|mét)\b)", # Bắt những cụm từ như "đường rộng 10m", "hẻm 4m",...
