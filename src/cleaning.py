@@ -90,13 +90,16 @@ class DataCleaner:
 
         geolocator = Nominatim(user_agent="vn_address_distance")
 
-        not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
-        major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|cầu|ngã tư|ngã ba|ngã 4|ngã 3|nhà'
+        not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõ|ngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
+        major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|ngã tư|ngã ba|ngã 4|ngã 3'
         on_main_road = "\b(?:ngay|trên|nằm)?\s*(?:mặt tiền|mặt phố|mặt đường|phố|đường)\b"
+        distance_to_main_road = r"(?:vài\s*bước|[0-9]+\s*m|[0-9]+m|mấy\s*m|chỉ\s*\d+\s*m)(?:\s+\w+){0,3}\s+(?:ra|tới)\s+(?:mặt\s*tiền|đường|phố|đường\s+chính|mặt\s*phố)"
 
         if re.search(not_on_main_road, text):
             return "Mặt ngõ"
         elif re.search(rf'(?:cách|ra|gần|sát)(?:\s+\w+){{0,5}}\s+(?:{major_roads})', text, re.IGNORECASE):
+            return "Mặt ngõ"
+        elif re.search(distance_to_main_road, text, re.IGNORECASE):
             return "Mặt ngõ"
         elif lat is not None and lon is not None:
             lat, lon = float(lat), float(lon)
