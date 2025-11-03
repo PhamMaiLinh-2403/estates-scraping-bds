@@ -60,7 +60,6 @@ FACADE_COUNT_MAP = [
         (r'\b3\s+mặt\s+tiền\b', 3),
         (r'\bba\s+mặt\s+tiền\b', 3),
         (r'\blô\s+góc\s+3\s+mặt\b', 3),
-        (r'\b3\s+mặt\s+thoáng\b', 3),
 
         # Keywords for 2 facades (most common variant after 1)
         (r'\blô\s+góc\s+2\s+mặt\s+tiền\b', 2),
@@ -68,7 +67,6 @@ FACADE_COUNT_MAP = [
         (r'\bhai\s+mặt\s+tiền\b', 2),
         (r'\blô\s+góc\b', 2),  # "lô góc" strongly implies 2 facades
         (r'\bcăn\s+góc\b', 2),
-        (r'\b2\s+mặt\s+thoáng\b', 2),
 
         # Keywords explicitly stating 1 facade (checked last)
         (r'\b1\s+mặt\s+tiền\b', 1),

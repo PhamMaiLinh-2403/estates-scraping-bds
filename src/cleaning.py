@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 import requests
 import random
+import osmnx as ox
+import networkx as nx
 from rapidfuzz import fuzz, process
 from math import * 
 from geopy.geocoders import Nominatim
@@ -720,7 +722,7 @@ class DataCleaner:
             
             # TH2: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
             major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl'
-            tertiary = 'mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|cầu|ngã tư|ngã ba|ngã 4|ngã 3|nhà'
+            tertiary = 'mặt tiền|mt|trục chính|ngã tư|ngã ba|ngã 4|ngã 3|oto|ô tô'
             landmarks = 'trường|chợ|siêu thị|vincom|aeon|lotte|công viên|cv|hẻm|hxh|ngõ|vườn|trung tâm|vinmart|winmart|vin|mall|tttm|bigc|go|gigamall|đại học|đh|bến xe|bx|ga'
             places_of_interest = 'biển|sông|hồ|ubnd|chung cư|cc|khu đô thị|kđt|kdt|sân bay|bệnh viện|bv|quận|q(?:\d+)|thành phố|tp|huyện|thị xã|thị trấn|tx|bán kính'
             
@@ -772,10 +774,6 @@ class DataCleaner:
             # Gần, sát, giáp phố 
             if re.search(rf'(?:gần|giáp|sát)(?:\s+\S+){{0,2}}\s+(?:{major_roads}|{tertiary})', text):
                 return 20
-            
-            # TH4: Ngõ nông
-            if re.search(r'ngõ\s*(?:\S+\s*){0,3}(?:nông|ngắn)', text):
-                return 10
             
         return None 
 
@@ -853,50 +851,88 @@ class DataImputer:
         
         # If length is not missing, or if it cannot be imputed, return the original value.
         return length 
-
+    
     @staticmethod
-    def fill_missing_distance_to_the_main_road(row):
+    def fill_missing_distance_to_the_main_road(df):
         """
-        Fill 'Khoảng cách tới trục đường chính (m)'.
+        Impute missing 'Khoảng cách tới trục đường chính (m)' by computing
+        the shortest path distance to the main road using OSMnx.
+        Includes retry logic for name mismatches with optional 'Đường' or 'Phố' prefixes.
         """
+        target_col = "Khoảng cách tới trục đường chính (m)"
+        df_imputed = df.copy()
+        rows_to_impute = df_imputed[df_imputed[target_col].isna()].index
 
-        def normalize_street_name(name: str) -> str:
-            """Normalize Vietnamese street names for OSM matching."""
-            if not isinstance(name, str) or not name.strip():
-                return ""
-            prefixes = [
-                r"\bđường\b", r"\bphố\b", r"\bđại\s*lộ\b", r"\btỉnh\s*lộ\b",
-                r"\bquốc\s*lộ\b", r"\bql\d+\b", r"\bhẻm\b", r"\bngách\b", r"\bngõ\b"
-            ]
-            cleaned = re.sub(r"^(?:" + "|".join(prefixes) + r")\s*", "", name, flags=re.IGNORECASE).strip()
-            return re.sub(r"\s+", " ", cleaned).lower()
+        def has_name(x, name):
+            if isinstance(x, list):
+                return name in x
+            return x == name
 
-        # Already has distance
-        if pd.notna(row.get("Khoảng cách tới trục đường chính (m)")):
-            return row["Khoảng cách tới trục đường chính (m)"]
+        for idx in rows_to_impute:
+            row = df_imputed.loc[idx]
+            lat, lon = row.get("latitude"), row.get("longitude")
+            road_name = row.get("Đường phố")  
 
-        lat, lon = row.get("latitude"), row.get("longitude")
-        if pd.isna(lat) or pd.isna(lon):
-            return None
+            if pd.isna(lat) or pd.isna(lon) or pd.isna(road_name):
+                continue
 
-        street_name = row.get("Đường phố")
-        if isinstance(street_name, str) and street_name.strip():
-            street_name = normalize_street_name(street_name)
-            result = DataImputer._distance_to_named_street(lat, lon, street_name)
-            if result:
-                print(f"{street_name}: {result['distance_m']} m (named street)")
-                return result["distance_m"]
+            try:
+                G = ox.graph_from_point((lat, lon), dist=1000, network_type="all", simplify=True)
+            except Exception as e:
+                print(f"[{idx}] Failed to load graph around ({lat}, {lon}): {e}")
+                continue
 
-        # Fallback to OSM main-road tags
-        dist_main = DataImputer._distance_to_main_road(lat, lon)
-        if dist_main is not None:
-            print(f"Main-road fallback: {dist_main} m")
-            return dist_main
+            try:
+                edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
+            except Exception as e:
+                print(f"[{idx}] Failed to convert graph to GeoDataFrame: {e}")
+                continue
 
-        # Random fallback
-        fallback = random.randint(20, 200)
-        print(f"No OSM or named match → fallback {fallback}m")
-        return fallback
+            road_name_variants = [road_name.strip()]
+
+            if not road_name.lower().startswith(("đường", "phố")):
+                road_name_variants.append("Đường " + road_name.strip())
+                road_name_variants.append("Phố " + road_name.strip())
+            else:
+                parts = road_name.split(" ", 1)
+                if len(parts) > 1:
+                    road_name_variants.append(parts[1].strip())
+
+            found_distance = None
+
+            for name_variant in road_name_variants:
+                road_edges = edges[edges["name"].apply(lambda x: has_name(x, name_variant), convert_dtype=False)]
+                if road_edges.empty:
+                    continue
+
+                try:
+                    orig_node = ox.distance.nearest_nodes(G, lon, lat)
+                except Exception:
+                    continue
+
+                road_nodes = set()
+                for u, v, key in road_edges.index:
+                    road_nodes.add(u)
+                    road_nodes.add(v)
+
+                distances = []
+                for target_node in road_nodes:
+                    try:
+                        dist = nx.shortest_path_length(G, orig_node, target_node, weight="length")
+                        distances.append(dist)
+                    except nx.NetworkXNoPath:
+                        continue
+
+                if distances:
+                    found_distance = round(min(distances), 2)
+                    break  
+
+            if found_distance is not None:
+                df_imputed.loc[idx, target_col] = found_distance
+            else:
+                print(f"[{idx}] Could not find any road match for '{road_name}' near ({lat}, {lon}).")
+
+        return df_imputed
 
 
 class FeatureEngineer:
