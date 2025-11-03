@@ -49,13 +49,13 @@ class DataCleaner:
         except (ValueError, TypeError):
             return None
         
-    @staticmethod     
+    @staticmethod
     def _is_negated(text, keyword):
-        negation_keywords = ['không', 'chưa', 'ko', "đường", "ngõ", "hẻm", "ngách", "kiệt"]
+        negation_keywords = ['không', 'chưa', 'ko', 'chẳng', 'khó']
         window = 4  
 
-        for keyword in negation_keywords:
-            pattern = rf'{keyword}(?:\s+\w+){{0,{window}}}?\s+{re.escape(keyword)}'
+        for neg in negation_keywords:
+            pattern = rf'\b{neg}(?:\s+\w+){{0,{window}}}?\s+{re.escape(keyword)}\b'
             if re.search(pattern, text):
                 return True
         return False
@@ -622,6 +622,8 @@ class DataCleaner:
             r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+sàn",
             r"(?i)diện\s+tích\s+sử\s+dụng(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
             r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+diện\s+tích\s+sử\s+dụng",
+            r"(?i)dtsd(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
+            r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+dtsd"
         ]
 
         for pattern in patterns:

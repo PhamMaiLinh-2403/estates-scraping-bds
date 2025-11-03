@@ -108,6 +108,7 @@ def clean_details():
     df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
     df.drop_duplicates()
     df.dropna(subset=["title", "description"], inplace=True)
+    df = df[~df['title'].str.contains('bán dãy nhà|bán lô nhà', case=False, na=False)]
 
     print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
 
