@@ -614,14 +614,28 @@ class DataCleaner:
         construction_area = DataCleaner.extract_construction_area(row)
         num_floors = DataCleaner.extract_num_floors(row)
         text = DataCleaner.clean_description_text(str(row.get("description") or "").lower().strip())
-        match = re.search(r"(?i)diện\s+tích\s+sàn\s*:?\s*(\d+(?:[.,]\d+)?)\s*m[²2]", text, re.IGNORECASE)
 
-        if match:
-            return float(match.group(1).replace(",", "."))
-        else:
-            if construction_area is not None and num_floors is not None:
-                return float(round(construction_area * num_floors, 2)) 
-            return None 
+        patterns = [
+            r"(?i)diện\s+tích\s+sàn(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
+            r"(?i)\bsàn(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
+            r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+diện\s+tích\s+sàn",
+            r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+sàn",
+            r"(?i)diện\s+tích\s+sử\s+dụng(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
+            r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+diện\s+tích\s+sử\s+dụng",
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if match:
+                try:
+                    return float(match.group(1).replace(",", "."))
+                except ValueError:
+                    continue  
+
+        if construction_area is not None and num_floors is not None:
+            return round(construction_area * num_floors, 2)
+
+        return None
 
     @staticmethod 
     def extract_adjacent_lane_width(row): 
@@ -765,7 +779,7 @@ class DataCleaner:
             # Cách bao nhiêu bước chân ra phố, tới phố có bao nhiêu bước chân...
             pattern = re.search(rf'(bước\s*(?:\S+\s*){{0,5}}ra\s*(?:{major_roads}|{tertiary}))|(cách\s*(?:\S+\s*){{0,2}}(?:{major_roads}|{tertiary})\s*(?:\S+\s*){{0,2}}bước)', text)
             if pattern:
-                return 5
+                return 10
             
             # Cách bao nhiêu phút ra phố 
             if re.search(rf'phút(?:\S+\s*){{0,3}}ra\s*(?:{major_roads}|{tertiary}\s*)', text):
@@ -774,6 +788,9 @@ class DataCleaner:
             # Gần, sát, giáp phố 
             if re.search(rf'(?:gần|giáp|sát)(?:\s+\S+){{0,2}}\s+(?:{major_roads}|{tertiary})', text):
                 return 20
+            
+            if "ngõ nông" in text.lower():
+                return 20 
             
         return None 
 
