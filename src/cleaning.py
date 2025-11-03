@@ -791,17 +791,18 @@ class DataImputer:
         target_col = 'Kích thước mặt tiền (m)'
 
         try:
-            ground_truth = pd.read_excel(INFO_FILE)
+            ground_truth = pd.read_excel(INFO_FILE,sheet_name="Sheet1")
             print(f"Loaded ground truth file successfully from: {INFO_FILE}")
         except FileNotFoundError:
             print(f"Ground truth file not found.")
             return df
 
+        ground_truth = ground_truth[['Tỉnh/Thành phố', 'Diện tích (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài']]
         ground_truth.dropna(inplace=True)
-        ground_truth = ground_truth[(ground_truth[target_col] > 0) & (ground_truth['Kích thước mặt tiền (m)'] > 0)]
+        ground_truth = ground_truth[ground_truth[target_col] > 0]
 
         if ground_truth.empty:
-            print("Cảnh báo: Không có dữ liệu hợp lệ trong file ground truth sau khi làm sạch. Bỏ qua.")
+            print("No valid values in ground truth file after cleaning.")
             return df
 
         df_imputed = df.copy()
@@ -821,17 +822,16 @@ class DataImputer:
             if gt_province_subset.empty:
                 continue
 
-            # 2. Look up the estate with closest area
-            gt_province_subset.loc[:, 'area_diff'] = (gt_province_subset['Diện tích (m2)'] - target_area).abs()
+            # 3. Look up the estate with closest area
+            gt_province_subset['area_diff'] = (gt_province_subset['Diện tích (m2)'] - target_area).abs()
             best_match = gt_province_subset.loc[gt_province_subset['area_diff'].idxmin()]
             gt_width = best_match['Kích thước mặt tiền (m)']
             gt_length = best_match['Kích thước chiều dài']
 
-            # 3. Calculate the width from the ground truth estate's shape ratio 
+            # 4. Calculate the width from the ground truth estate's shape ratio 
             shape_ratio = gt_width / gt_length
             imputed_width = (target_area * shape_ratio) ** 0.5
             df_imputed.loc[index, target_col] = round(imputed_width, 2)
-            imputed_count += 1
 
         return df_imputed
 
