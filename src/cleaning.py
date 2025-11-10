@@ -12,11 +12,7 @@ from rapidfuzz import fuzz, process
 from math import * 
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-
-# import osmnx as ox
-# from shapely.geometry import Point
-# from shapely.ops import nearest_points
-# from geopy.distance import geodesic
+from shapely.geometry import Point
 
 from src.config import *
 
