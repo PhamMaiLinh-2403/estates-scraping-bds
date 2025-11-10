@@ -1027,13 +1027,13 @@ class FeatureEngineer:
         - Otherwise, subtract building value from the price before dividing with area.
         """
         # --- Use the temporary boolean flag ---  
-        total_price = row.get('Giá rao bán/giao dịch')
+        estimated_price = row.get('Giá ước tính')
         land_area = row.get('Diện tích đất (m2)')
         construction_cost_per_sqm = row.get('Đơn giá xây dựng')
         remaining_quality = row.get('Chất lượng còn lại')
         total_floor_area = row.get('Tổng diện tích sàn')
 
-        if pd.isna(total_price) or pd.isna(construction_cost_per_sqm) or \
+        if pd.isna(estimated_price) or pd.isna(construction_cost_per_sqm) or \
                 pd.isna(land_area) or pd.isna(remaining_quality) or \
                 pd.isna(total_floor_area):
             return None
@@ -1043,10 +1043,10 @@ class FeatureEngineer:
 
         building_value = construction_cost_per_sqm * total_floor_area * remaining_quality
 
-        if building_value >= total_price:
-            return round(total_price / land_area, 2)
+        if building_value >= estimated_price:
+            return round(estimated_price / land_area, 2)
 
-        land_value = total_price - building_value
-        land_unit_price = (land_value * 0.98) / land_area
+        land_value = estimated_price - building_value
+        land_unit_price = land_value / land_area
 
         return round(land_unit_price, 2)

@@ -154,7 +154,7 @@ def clean_details():
     print("Start imputing missing values...")
     df = DataImputer.fill_missing_width(df)
     df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
-    df["Khoảng cách tới trục đường chính (m)"] = DataImputer.fill_missing_distance_to_the_main_road(df)
+    # df["Khoảng cách tới trục đường chính (m)"] = DataImputer.fill_missing_distance_to_the_main_road(df)
 
     # 4. Create new features 
     print("Start feature engineeering...")
