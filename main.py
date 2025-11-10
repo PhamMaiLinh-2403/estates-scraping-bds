@@ -108,7 +108,7 @@ def clean_details():
     df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
     df.drop_duplicates()
     df.dropna(subset=["title", "description"], inplace=True)
-    df = df[~df['title'].str.contains('bán dãy nhà|bán lô nhà', case=False, na=False)]
+    df = df[~df['title'].str.contains('bán dãy nhà|bán lô nhà|những căn nhà', case=False, na=False)]
 
     print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
 
@@ -154,7 +154,7 @@ def clean_details():
     print("Start imputing missing values...")
     df = DataImputer.fill_missing_width(df)
     df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
-    # df["Khoảng cách tới trục đường chính (m)"] = DataImputer.fill_missing_distance_to_the_main_road(df)
+    df = DataImputer.fill_missing_distance_to_the_main_road(df)
 
     # 4. Create new features 
     print("Start feature engineeering...")

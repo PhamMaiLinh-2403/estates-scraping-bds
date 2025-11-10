@@ -59,13 +59,12 @@ FACADE_COUNT_MAP = [
         # Keywords for 3 facades
         (r'\b3\s+mặt\s+tiền\b', 3),
         (r'\bba\s+mặt\s+tiền\b', 3),
-        (r'\blô\s+góc\s+3\s+mặt\b', 3),
 
         # Keywords for 2 facades (most common variant after 1)
         (r'\blô\s+góc\s+2\s+mặt\s+tiền\b', 2),
         (r'\b2\s+mặt\s+tiền\b', 2),
         (r'\bhai\s+mặt\s+tiền\b', 2),
-        (r'\blô\s+góc\b', 2),  # "lô góc" strongly implies 2 facades
+        (r'\blô\s+góc\b', 2),  
         (r'\bcăn\s+góc\b', 2),
 
         # Keywords explicitly stating 1 facade (checked last)
@@ -108,14 +107,14 @@ QUALITY_LEVELS = [
         'đất nền', 'nhà tạm', 'chủ yếu lấy đất', 'tặng nhà'
         'có nhà nhưng không đáng giá', 'không tính giá trị nhà',
         'nhà cấp 4 cũ', 'nhà xuống cấp', 'giá trị đất là chính',
-        'bán đất'
+        'bán đất', 'sắp sập'
     ]),
     # Priority 2: Old or needs significant repair (50%)
     (0.5, [
-        'nhà cũ', 'nhà nát', 'cần sửa chữa', 'tiện xây mới',
+        'nhà cũ', 'cần sửa chữa', 'tiện xây mới',
         'xây lâu năm', 'xuống cấp', 'cũ nhưng ở tạm được',
         'cũ kỹ', 'nhiều năm chưa sửa', 'cần cải tạo',
-        'nền móng yếu', 'sắp sập', 'cần xây lại', 
+        'nền móng yếu', 'cần xây lại', 
         'không có giá trị sử dụng',
     ]),
     # Priority 3: Good, well-maintained condition (85%)

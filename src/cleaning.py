@@ -2,9 +2,7 @@ import re
 import json
 import time 
 import pandas as pd
-# import geopandas as gpd
 import numpy as np
-import requests
 import random
 import osmnx as ox
 import networkx as nx
@@ -12,7 +10,7 @@ from rapidfuzz import fuzz, process
 from math import * 
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-from shapely.geometry import Point
+from geopy.distance import geodesic
 
 from src.config import *
 
@@ -66,7 +64,7 @@ class DataCleaner:
         
         # Pattern to detect the start of the seller info block
         contact_start_pattern = re.compile(
-            r'(lh|liên hệ|zalo|sđt|phone|call|chuyên bđs|số điện thoại)',
+            r'(lh|liên hệ|zalo|sđt|phone|call|chuyên bđs|số điện thoại|ký gửi|kí gửi)',
             re.IGNORECASE
         )
 
@@ -184,7 +182,7 @@ class DataCleaner:
         if short_address:
             parts = [p.strip() for p in short_address.split(",")]
             for part in parts:
-                match = re.search(r'\b(đường|phố|quốc lộ|đại lộ|xa lộ)\s+[\w\s\-()\/]+', part.lower())
+                match = re.search(r'\b(đường|phố|quốc lộ|đại lộ|xa lộ|tỉnh lộ)\s+[\w\s\-()\/]+', part.lower())
                 if match and len(match.group(0).split()) <= 5:
                     return match.group(0).title().strip()
 
@@ -194,7 +192,7 @@ class DataCleaner:
                 addr_list = json.loads(parts_raw)
                 if addr_list:
                     last_item = addr_list[-1]
-                    m = re.search(r"tại (đường|phố|quốc lộ|đại lộ|xa lộ)\s+([^,]+)", last_item, re.IGNORECASE)
+                    m = re.search(r"tại (đường|phố|quốc lộ|đại lộ|xa lộ|tỉnh lộ)\s+([^,]+)", last_item, re.IGNORECASE)
                     if m and len(m.group(0).split()) <= 5:
                         return f"{m.group(1).capitalize()} {m.group(2).strip()}"
             except (json.JSONDecodeError, ValueError, SyntaxError):
@@ -219,7 +217,7 @@ class DataCleaner:
         parts = [p.strip() for p in short_address.split(",") if pd.notna(p) and isinstance(p, str)]
         lat, lon = row.get("latitude", ""), row.get("longitude", "")
         address_details = []
-        ignore_prefixes = ['đường', 'phố', 'phường', 'quận', 'huyện']
+        ignore_prefixes = ['đường', 'phố', 'phường', 'quận', 'huyện', 'quốc lộ', 'đại lộ']
 
         for part in parts:
             lower_part = part.lower().strip()
@@ -228,9 +226,11 @@ class DataCleaner:
             if any(lower_part.startswith(f"{prefix} số") for prefix in ignore_prefixes):
                 continue
 
+            if any(re.match(rf"^{prefix}\s+\d+([a-z]*)\b", lower_part) for prefix in ignore_prefixes):
+                continue
+
             if re.search(r'\b(số|ngõ|hẻm|ngách|kiệt|tổ|khu phố|khu vực|khu đô thị|khu công nghiệp|kđt|khu dân cư|dự án)\b', lower_part):
                 address_details.append(part)
-
 
         if address_details:
             return ", ".join(address_details)
@@ -245,6 +245,7 @@ class DataCleaner:
             )
         ):
             return parts[0]
+        
         return DataCleaner._is_on_main_road(text, lat, lon)
             
     @staticmethod
@@ -451,7 +452,7 @@ class DataCleaner:
             if 'nhà trệt' in text:
                 if not re.search(r'nhà trệt\s*(?:\S+\s+){0,2}(?:\d*\s*)(?:tầng|lầu|tấm|mê|lửng|gác)', text):
                     return 4_000_000
-            if re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4\W|nc4|nhà trệt|nhà nát', string=text):
+            if re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4\W|nc4|nhà trệt|nhà nát|c4', string=text):
                 return 4_000_000
             if row['Số tầng công trình'] == 1:
                 return 6_275_876
@@ -527,7 +528,7 @@ class DataCleaner:
         
         if isinstance(text, str) and pd.notnull(text):
 
-            match = re.search(r"(?<!cách\s)(?<!gần\s)(?<!rất\sgần\s)(mt|mặt tiền)\s*(\d+[.,]?\d*)\s*(mét|m)\b", text, re.IGNORECASE)
+            match = re.search(r"(?<!cách\s)(?<!gần\s)(?<!rất\sgần\s)(?<!tới\s)(?<!đến\s)(mt|mặt tiền|rộng)\s*(\d+[.,]?\d*)\s*(mét|m)\b", text, re.IGNORECASE)
             if match:
                 return float(match.group(2).replace(',', '.'))
 
@@ -598,7 +599,7 @@ class DataCleaner:
                 if score > 55:
                     return land_area       
         
-        not_residential_land = ["đất ở, đất vườn"]
+        not_residential_land = ["đất trồng, đất vườn"]
         for keyword in not_residential_land:
             if keyword not in text:
                 return land_area
@@ -785,7 +786,7 @@ class DataCleaner:
             
             # Gần, sát, giáp phố 
             if re.search(rf'(?:gần|giáp|sát)(?:\s+\S+){{0,2}}\s+(?:{major_roads}|{tertiary})', text):
-                return 20
+                return 10
             
             if "ngõ nông" in text.lower():
                 return 20 
@@ -869,10 +870,6 @@ class DataImputer:
     
     @staticmethod
     def fill_missing_distance_to_the_main_road(df):
-        """
-        Impute missing 'Khoảng cách tới trục đường chính (m)' by computing
-        the shortest path distance to the main road using OSMnx.
-        """
         target_col = "Khoảng cách tới trục đường chính (m)"
         df_imputed = df.copy()
         rows_to_impute = df_imputed[df_imputed[target_col].isna()].index
@@ -921,8 +918,9 @@ class DataImputer:
                     )
                 ]
 
-                # Retry logic: if not found, toggle prefixes
+                # Retry logic: toggle prefixes if not found
                 if not street_edges:
+                    alt = street
                     if street.lower().startswith("đường "):
                         alt = street.replace("đường ", "", 1)
                     elif street.lower().startswith("phố "):
@@ -954,10 +952,10 @@ class DataImputer:
                     for u, v, k in street_edges
                 ]
 
-                # Pick the nearest street edge
+                # Pick the nearest street edge using geodesic distance
                 edge_lat, edge_lon, (u, v) = min(
                     edge_centers,
-                    key=lambda p: ox.distance.great_circle_vec(lat, lon, p[0], p[1]),
+                    key=lambda p: geodesic((lat, lon), (p[0], p[1])).meters,
                 )
 
                 dest_node = ox.distance.nearest_nodes(G, edge_lon, edge_lat)
