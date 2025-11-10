@@ -876,7 +876,6 @@ class DataImputer:
         """
         Impute missing 'Khoảng cách tới trục đường chính (m)' by computing
         the shortest path distance to the main road using OSMnx.
-        Includes retry logic for name mismatches with optional 'Đường' or 'Phố' prefixes.
         """
         target_col = "Khoảng cách tới trục đường chính (m)"
         df_imputed = df.copy()
@@ -890,66 +889,90 @@ class DataImputer:
         for idx in rows_to_impute:
             row = df_imputed.loc[idx]
             lat, lon = row.get("latitude"), row.get("longitude")
-            road_name = row.get("Đường phố")  
+            address = row.get("short_address")
 
-            if pd.isna(lat) or pd.isna(lon) or pd.isna(road_name):
+            if pd.isna(lat) or pd.isna(lon) or not address:
                 continue
+
+            part = address.split(",")[0]
+            match = re.search(
+                r'\b(?:đường|phố)\s+[A-Za-zÀ-ỹà-ỹĐđ]+(?:\s+[A-Za-zÀ-ỹà-ỹĐđ]+)*',
+                part,
+                re.IGNORECASE,
+            )
+
+            if not match:
+                continue
+
+            street = match.group(0).strip()
+            print(f"Processing row {idx} for street: {street}")
 
             try:
-                G = ox.graph_from_point((lat, lon), dist=1000, network_type="all", simplify=True)
-            except Exception as e:
-                print(f"[{idx}] Failed to load graph around ({lat}, {lon}): {e}")
-                continue
+                # Load the graph around the point (within ~500m)
+                G = ox.graph_from_point((lat, lon), dist=500, network_type="all")
 
-            try:
-                edges = ox.graph_to_gdfs(G, nodes=False, edges=True)
-            except Exception as e:
-                print(f"[{idx}] Failed to convert graph to GeoDataFrame: {e}")
-                continue
+                # Find the nearest node to the property
+                orig_node = ox.distance.nearest_nodes(G, lon, lat)
 
-            road_name_variants = [road_name.strip()]
+                # Find edges matching the street name
+                street_edges = [
+                    (u, v, k)
+                    for u, v, k, data in G.edges(keys=True, data=True)
+                    if data.get("name")
+                    and any(
+                        has_name(n, street)
+                        for n in ([data["name"]] if isinstance(data["name"], str) else data["name"])
+                    )
+                ]
 
-            if not road_name.lower().startswith(("đường", "phố")):
-                road_name_variants.append("Đường " + road_name.strip())
-                road_name_variants.append("Phố " + road_name.strip())
-            else:
-                parts = road_name.split(" ", 1)
-                if len(parts) > 1:
-                    road_name_variants.append(parts[1].strip())
+                # Retry logic: if not found, toggle prefixes
+                if not street_edges:
+                    if street.lower().startswith("đường "):
+                        alt = street.replace("đường ", "", 1)
+                    elif street.lower().startswith("phố "):
+                        alt = street.replace("phố ", "", 1)
+                    else:
+                        alt = "đường " + street
 
-            found_distance = None
+                    street_edges = [
+                        (u, v, k)
+                        for u, v, k, data in G.edges(keys=True, data=True)
+                        if data.get("name")
+                        and any(
+                            has_name(n, alt)
+                            for n in ([data["name"]] if isinstance(data["name"], str) else data["name"])
+                        )
+                    ]
 
-            for name_variant in road_name_variants:
-                road_edges = edges[edges["name"].apply(lambda x: has_name(x, name_variant), convert_dtype=False)]
-                if road_edges.empty:
+                if not street_edges:
+                    print(f"No street match for {street} at row {idx}")
                     continue
 
-                try:
-                    orig_node = ox.distance.nearest_nodes(G, lon, lat)
-                except Exception:
-                    continue
+                # Find the nearest edge among those matching the street name
+                edge_centers = [
+                    (
+                        (G.nodes[u]["y"] + G.nodes[v]["y"]) / 2,
+                        (G.nodes[u]["x"] + G.nodes[v]["x"]) / 2,
+                        (u, v),
+                    )
+                    for u, v, k in street_edges
+                ]
 
-                road_nodes = set()
-                for u, v, key in road_edges.index:
-                    road_nodes.add(u)
-                    road_nodes.add(v)
+                # Pick the nearest street edge
+                edge_lat, edge_lon, (u, v) = min(
+                    edge_centers,
+                    key=lambda p: ox.distance.great_circle_vec(lat, lon, p[0], p[1]),
+                )
 
-                distances = []
-                for target_node in road_nodes:
-                    try:
-                        dist = nx.shortest_path_length(G, orig_node, target_node, weight="length")
-                        distances.append(dist)
-                    except nx.NetworkXNoPath:
-                        continue
+                dest_node = ox.distance.nearest_nodes(G, edge_lon, edge_lat)
 
-                if distances:
-                    found_distance = round(min(distances), 2)
-                    break  
+                # Compute shortest path distance
+                distance = nx.shortest_path_length(G, orig_node, dest_node, weight="length")
+                df_imputed.loc[idx, target_col] = distance
 
-            if found_distance is not None:
-                df_imputed.loc[idx, target_col] = found_distance
-            else:
-                print(f"[{idx}] Could not find any road match for '{road_name}' near ({lat}, {lon}).")
+            except Exception as e:
+                print(f"Error computing distance for row {idx}: {e}")
+                continue
 
         return df_imputed
 
