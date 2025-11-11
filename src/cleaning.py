@@ -735,7 +735,7 @@ class DataCleaner:
             
             # TH2: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
             major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl'
-            tertiary = 'mặt tiền|mt|trục chính|ngã tư|ngã ba|ngã 4|ngã 3|oto|ô tô'
+            tertiary = 'mặt tiền|mt|trục chính|oto|ô tô'
             landmarks = 'trường|chợ|siêu thị|vincom|aeon|lotte|công viên|cv|hẻm|hxh|ngõ|vườn|trung tâm|vinmart|winmart|vin|mall|tttm|bigc|go|gigamall|đại học|đh|bến xe|bx|ga'
             places_of_interest = 'biển|sông|hồ|ubnd|chung cư|cc|khu đô thị|kđt|kdt|sân bay|bệnh viện|bv|quận|q(?:\d+)|thành phố|tp|huyện|thị xã|thị trấn|tx|bán kính'
             
@@ -759,7 +759,11 @@ class DataCleaner:
                         return result
                     return float(pattern.group(1).replace('m', '').replace(',', '.'))
                     
-            greedy_matches = re.search(r'(?:\b\w+\b\W+){0,5}?cách\s*(?:(?!\d+[.,])\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*k*m)(?:\S+\s*){0,7}', text, re.IGNORECASE)
+            greedy_matches = re.search(
+                                r'(?:\b\w+\b\W+){0,5}?cách\s*(?:(?!hướng về)(?!\d+[.,])\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*km)(?:(?!hướng về)\S+\s*){0,7}',
+                                text,
+                                re.IGNORECASE
+                            )
             if greedy_matches:
                 if re.search(landmarks, greedy_matches.group(0)) or re.search(places_of_interest, greedy_matches.group(0)):
                     pass
@@ -870,11 +874,18 @@ class DataImputer:
     
     @staticmethod
     def fill_missing_distance_to_the_main_road(df):
+        """
+        Fill missing values in 'Khoảng cách tới trục đường chính (m)' 
+        by computing the shortest path distance from each property to 
+        the nearest edge matching the main road name from OpenStreetMap.
+        """
+
         target_col = "Khoảng cách tới trục đường chính (m)"
         df_imputed = df.copy()
         rows_to_impute = df_imputed[df_imputed[target_col].isna()].index
 
         def has_name(x, name):
+            """Helper: check if an OSM edge name matches a given street name."""
             if isinstance(x, list):
                 return name in x
             return x == name
@@ -887,38 +898,45 @@ class DataImputer:
             if pd.isna(lat) or pd.isna(lon) or not address:
                 continue
 
+            # Extract street name (matches words after 'đường' or 'phố')
             part = address.split(",")[0]
             match = re.search(
                 r'\b(?:đường|phố)\s+[A-Za-zÀ-ỹà-ỹĐđ]+(?:\s+[A-Za-zÀ-ỹà-ỹĐđ]+)*',
                 part,
                 re.IGNORECASE,
             )
-
             if not match:
                 continue
 
             street = match.group(0).strip()
-            print(f"Processing row {idx} for street: {street}")
+            print(f"[Row {idx}] Processing address: {address} | Street: {street}")
 
             try:
-                # Load the graph around the point (within ~500m)
+                # Load OSM graph around the property
                 G = ox.graph_from_point((lat, lon), dist=500, network_type="all")
 
-                # Find the nearest node to the property
-                orig_node = ox.distance.nearest_nodes(G, lon, lat)
+                # Project graph to local CRS (UTM) → distances now in meters
+                G_proj = ox.project_graph(G)
 
-                # Find edges matching the street name
-                street_edges = [
-                    (u, v, k)
-                    for u, v, k, data in G.edges(keys=True, data=True)
-                    if data.get("name")
-                    and any(
-                        has_name(n, street)
-                        for n in ([data["name"]] if isinstance(data["name"], str) else data["name"])
-                    )
-                ]
+                # Find nearest node to the property
+                orig_node = ox.distance.nearest_nodes(G_proj, lon, lat)
 
-                # Retry logic: toggle prefixes if not found
+                # Find edges that match the street name
+                def find_street_edges(name):
+                    return [
+                        (u, v, k)
+                        for u, v, k, data in G_proj.edges(keys=True, data=True)
+                        if data.get("name") and any(
+                            has_name(n, name)
+                            for n in (
+                                [data["name"]] if isinstance(data["name"], str) else data["name"]
+                            )
+                        )
+                    ]
+
+                street_edges = find_street_edges(street)
+
+                # Try alternate naming (e.g. remove or add prefixes)
                 if not street_edges:
                     alt = street
                     if street.lower().startswith("đường "):
@@ -928,44 +946,40 @@ class DataImputer:
                     else:
                         alt = "đường " + street
 
-                    street_edges = [
-                        (u, v, k)
-                        for u, v, k, data in G.edges(keys=True, data=True)
-                        if data.get("name")
-                        and any(
-                            has_name(n, alt)
-                            for n in ([data["name"]] if isinstance(data["name"], str) else data["name"])
-                        )
-                    ]
+                    street_edges = find_street_edges(alt)
 
                 if not street_edges:
-                    print(f"No street match for {street} at row {idx}")
+                    print(f"[Row {idx}] No street match for: {street}")
                     continue
 
-                # Find the nearest edge among those matching the street name
+                # Pick the nearest street edge (Euclidean in projected CRS)
+                orig_x = G_proj.nodes[orig_node]["x"]
+                orig_y = G_proj.nodes[orig_node]["y"]
+
                 edge_centers = [
                     (
-                        (G.nodes[u]["y"] + G.nodes[v]["y"]) / 2,
-                        (G.nodes[u]["x"] + G.nodes[v]["x"]) / 2,
+                        (G_proj.nodes[u]["x"] + G_proj.nodes[v]["x"]) / 2,
+                        (G_proj.nodes[u]["y"] + G_proj.nodes[v]["y"]) / 2,
                         (u, v),
                     )
                     for u, v, k in street_edges
                 ]
 
-                # Pick the nearest street edge using geodesic distance
-                edge_lat, edge_lon, (u, v) = min(
+                edge_x, edge_y, (u, v) = min(
                     edge_centers,
-                    key=lambda p: geodesic((lat, lon), (p[0], p[1])).meters,
+                    key=lambda p: (orig_x - p[0]) ** 2 + (orig_y - p[1]) ** 2,
                 )
 
-                dest_node = ox.distance.nearest_nodes(G, edge_lon, edge_lat)
+                dest_node = ox.distance.nearest_nodes(G_proj, edge_x, edge_y)
 
-                # Compute shortest path distance
-                distance = nx.shortest_path_length(G, orig_node, dest_node, weight="length")
+                # Compute the shortest path distance in meters
+                distance = nx.shortest_path_length(G_proj, orig_node, dest_node, weight="length")
                 df_imputed.loc[idx, target_col] = distance
 
+                print(f"[Row {idx}] Distance computed: {distance:.1f} m")
+
             except Exception as e:
-                print(f"Error computing distance for row {idx}: {e}")
+                print(f"[Row {idx}] Error computing distance: {e}")
                 continue
 
         return df_imputed
