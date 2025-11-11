@@ -108,7 +108,13 @@ def clean_details():
     df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
     df.drop_duplicates()
     df.dropna(subset=["title", "description"], inplace=True)
-    df = df[~df['title'].str.contains('bán dãy nhà|bán lô nhà|những căn nhà', case=False, na=False)]
+
+    pattern = r"bán\s*(?:\S+\s+){0,3}?([2-9]|\d{2,})\s+\S*\s*nhà"
+    mask = (
+        df['title'].str.contains(pattern, case=False, regex=True, na=False) |
+        df['description'].str.contains(pattern, case=False, regex=True, na=False)
+    )
+    df = df[~mask]
 
     print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
 

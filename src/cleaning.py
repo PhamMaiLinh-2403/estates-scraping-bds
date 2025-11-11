@@ -82,12 +82,12 @@ class DataCleaner:
         return cleaned
     
     @staticmethod
-    def _is_on_main_road(text: str, lat, lon):
+    def _is_on_main_road(text: str, short_address, lat, lon):
         text = DataCleaner.clean_description_text(text.lower().strip())
 
-        geolocator = Nominatim(user_agent="vn_address_distance")
+        # geolocator = Nominatim(user_agent="vn_address_distance")
 
-        not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõ|ngõ vào|ngõ thông|hẻm vào|hẻm thông|ngõ|hẻm|kiệt|ngách"
+        not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõ|ngõ vào|ngõ thông|hẻm vào|hẻm thông|hxh|hxt|(?<=\d)sẹc|(?<=\d)xẹt|hẻm|ngõ|ngách|kiệt ô tô|kiệt xe máy|kiệt(?<=\d)"
         major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|ngã tư|ngã ba|ngã 4|ngã 3'
         on_main_road = "\b(?:ngay|trên|nằm)?\s*(?:mặt tiền|mặt phố|mặt đường|phố|đường)\b"
         distance_to_main_road = r"(?:vài\s*bước|[0-9]+\s*m|[0-9]+m|mấy\s*m|chỉ\s*\d+\s*m)(?:\s+\w+){0,3}\s+(?:ra|tới)\s+(?:mặt\s*tiền|đường|phố|đường\s+chính|mặt\s*phố)"
@@ -98,25 +98,29 @@ class DataCleaner:
             return "Mặt ngõ"
         elif re.search(distance_to_main_road, text, re.IGNORECASE):
             return "Mặt ngõ"
-        elif lat is not None and lon is not None:
-            lat, lon = float(lat), float(lon)
-            try:
-                location = geolocator.reverse((lat, lon), language="vi", timeout=10)
-                print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
-                time.sleep(random.uniform(1, 2))  
+        elif re.search(r"ngõ|hẻm|ngách|kiệt(?<=\d)|\b\d+(?:/\d+[A-Za-z]*)+\b", short_address, re.IGNORECASE):
+            return "Mặt ngõ"
+        elif "vỉa hè" in text and re.search(on_main_road, text):
+            return "Mặt phố"
+        # elif lat is not None and lon is not None:
+        #     lat, lon = float(lat), float(lon)
+        #     try:
+        #         location = geolocator.reverse((lat, lon), language="vi", timeout=10)
+        #         print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
+        #         time.sleep(random.uniform(1, 2))  
 
-                if location and location.address:
-                    address = location.address.lower()
-                    for loc in ["ngõ", "hẻm", "ngách"]:
-                        if loc in address:
-                            return "Mặt ngõ"
+        #         if location and location.address:
+        #             address = location.address.lower()
+        #             for loc in ["ngõ", "hẻm", "ngách"]:
+        #                 if loc in address:
+        #                     return "Mặt ngõ"
                 
-                if re.search(on_main_road, text) or "nhà phố" in text.lower():
-                    return "Mặt phố"
+        #         if re.search(on_main_road, text) or "nhà phố" in text.lower():
+        #             return "Mặt phố"
 
-            except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
-                print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
-                time.sleep(1) # Wait a bit before the next request on failure
+        #     except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
+        #         print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
+        #         time.sleep(1) 
 
         return None
 
@@ -246,7 +250,7 @@ class DataCleaner:
         ):
             return parts[0]
         
-        return DataCleaner._is_on_main_road(text, lat, lon)
+        return DataCleaner._is_on_main_road(text, short_address, lat, lon)
             
     @staticmethod
     def extract_total_area(row):
@@ -724,13 +728,14 @@ class DataCleaner:
                 num_val = None
 
         text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
+        short_address = row.get("short_address", "").lower().strip()
         lat, lon = row.get("latitude", ""), row.get("longitude", "")
 
         if num_val is not None and num_val >= 50:
             return num_val
         elif pd.notna(text):
             # TH1: Nhà nằm trên mặt phố 
-            if DataCleaner._is_on_main_road(text, lat, lon) == "Mặt phố":
+            if DataCleaner._is_on_main_road(text, short_address, lat, lon) == "Mặt phố":
                 return 0 
             
             # TH2: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
@@ -738,15 +743,31 @@ class DataCleaner:
             tertiary = 'mặt tiền|mt|trục chính|oto|ô tô'
             landmarks = 'trường|chợ|siêu thị|vincom|aeon|lotte|công viên|cv|hẻm|hxh|ngõ|vườn|trung tâm|vinmart|winmart|vin|mall|tttm|bigc|go|gigamall|đại học|đh|bến xe|bx|ga'
             places_of_interest = 'biển|sông|hồ|ubnd|chung cư|cc|khu đô thị|kđt|kdt|sân bay|bệnh viện|bv|quận|q(?:\d+)|thành phố|tp|huyện|thị xã|thị trấn|tx|bán kính'
+            exclude_group = f'{landmarks}|{places_of_interest}'
             
             match_1 = re.search(rf'cách\s*(?:{major_roads})\s*(?:(?!\d{{1,3}}(?:[.,]\d+)*\s*(?:m|km))\S+\s*){{0,5}}?\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # cách đường Phạm Văn Đồng 5m, cách mặt phố Hai Bà Trưng 100m 
             match_2 = re.search(rf'\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))\s*ra\s*(?:{major_roads})\s*(?:\S+\s+){{0,5}}', text, re.IGNORECASE) # 50m ra đường Cầu Giấy
             match_3 = re.search(rf'ra\s*(?:{major_roads}|{tertiary})\s*(?:\S+\s+){{0,5}}\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # ra mặt phố cổ 20 m
-            match_4 = re.search(rf'cách\s*(?:{major_roads})\s*(?:(?!\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))(?!{landmarks}|{places_of_interest})\S+\s*){{1,7}}\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # cách mặt tiền Trần Nhân Tông 20m
-            match_5 = re.search(rf'(?:{major_roads}|{tertiary})(?!\s+(?:{landmarks}|{places_of_interest}))\s*(?:\b\w+\b\W+){{0,5}}?cách\s*(?:\b\w+\b\W+){{0,5}}(\d+(?:[.,]\d+)*\s*(?:m|km))', text, re.IGNORECASE) # đường Trường Chinh cách nhà 25m 
-            match_6 = re.search(rf'\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))\s*ra\s*(?:\S+\s*){{0, 2}}(?:{tertiary})\s*(?:\S+\s+){{0,5}}', text, re.IGNORECASE) # 50m ra Quốc Lộ 1A
-            match_7 = re.search(rf'\D(\d{{1,3}}(?:[,.]\d+)?\s*(?:m|km))\s*ra\s*(?:(?!{landmarks}|{places_of_interest})\S+\s+)', text, re.IGNORECASE) # 28m ra Trần Hưng Đạo 
-            
+            match_4 = re.search(rf'cách\s+(?:\S+\s+)*?(?:{major_roads})\s+(?:\S+\s*){{0,4}}?(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # cách mặt tiền Trần Nhân Tông 20m
+            match_5 = re.search(rf'(?:(?:{major_roads}|{tertiary})\s+\S+\s*){{1,5}}cách\s+(?:\S+\s*){{0,5}}(\d+(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # đường Trường Chinh cách nhà 25m 
+            match_6 = re.search(rf'\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))\s*ra\s*(?:\S+\s*){{0,2}}(?:{tertiary})\s*(?:\S+\s+){{0,5}}', text, re.IGNORECASE) # 50m ra Quốc Lộ 1A
+            pattern_7 = re.findall(r'(\d{1,3}(?:[.,]\d+)?\s*(?:m|km))\s*ra\s*([\w\s]+)', text, re.IGNORECASE)
+
+            match_7 = None
+            for distance, place in pattern_7:
+                if not re.search(rf'\b({landmarks}|{places_of_interest})\b', place, re.IGNORECASE):
+                    class DummyMatch:
+                        def __init__(self, distance, place):
+                            self._distance = distance
+                            self._place = place
+                        def group(self, idx):
+                            if idx == 0:
+                                return f"{self._distance} ra {self._place}"
+                            elif idx == 1:
+                                return self._distance
+                    match_7 = DummyMatch(distance, place)
+                    break  
+
             all_patterns = [match_1, match_2, match_3, match_4, match_5, match_6, match_7]
            
             for pattern in all_patterns:
@@ -759,28 +780,26 @@ class DataCleaner:
                         return result
                     return float(pattern.group(1).replace('m', '').replace(',', '.'))
                     
-            greedy_matches = re.search(
-                r'(?:\b\w+\b\W+){0,5}?cách\s*(?:\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*(?:km|m))(?:\S+\s*){0,7}',
-                text,
-                re.IGNORECASE
-            )
+            # greedy_matches = re.search(
+            #     r'(?:\b\w+\b\W+){0,5}?cách\s*(?:\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*(?:km|m))(?:\S+\s*){0,7}',
+            #     text,
+            #     re.IGNORECASE
+            # )
 
-            if greedy_matches:
-                distance = greedy_matches.group(1)
-                start_idx = greedy_matches.start() # Find the index of the match in text 
+            # if greedy_matches:
+            #     distance = greedy_matches.group(1)
+            #     post_text = text[greedy_matches.end():]  
+            #     words_after = ' '.join(post_text.split()[:10])  # Extract the first 10 words from the match onwards 
 
-                post_text = text[start_idx:]  
-                words_after = ' '.join(post_text.split()[:10])  # Extract the first 10 words from the match onwards 
-
-                # Skip if landmarks or places_of_interest appear in this context
-                if re.search(landmarks, words_after, re.IGNORECASE) or re.search(places_of_interest, words_after, re.IGNORECASE):
-                    pass 
-                else: 
-                    if 'km' in distance:
-                        result = float(distance.replace('km', '').replace(',', '.'))
-                        result *= 1000
-                        return result
-                    return float(distance.replace('m', '').replace(',', '.'))
+            #     # Skip if landmarks or places_of_interest appear in this context
+            #     if re.search(landmarks, words_after, re.IGNORECASE) or re.search(places_of_interest, words_after, re.IGNORECASE):
+            #         pass 
+            #     else: 
+            #         if 'km' in distance:
+            #             result = float(distance.replace('km', '').replace(',', '.'))
+            #             result *= 1000
+            #             return result
+            #         return float(distance.replace('m', '').replace(',', '.'))
             
             # TH3: Ước lượng gần phố (nhà, bước chân, phút,...)
             # Cách bao nhiêu căn nhà ra mặt phố 
