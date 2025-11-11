@@ -85,7 +85,7 @@ class DataCleaner:
     def _is_on_main_road(text: str, short_address, lat, lon):
         text = DataCleaner.clean_description_text(text.lower().strip())
 
-        geolocator = Nominatim(user_agent="vn_address_distance")
+        # geolocator = Nominatim(user_agent="vn_address_distance")
 
         not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõ|ngõ vào|ngõ thông|hẻm vào|hẻm thông|hxh|hxt|(?<=\d)sẹc|(?<=\d)xẹt|hẻm|ngõ|ngách|kiệt ô tô|kiệt xe máy|kiệt(?<=\d)"
         major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|ngã tư|ngã ba|ngã 4|ngã 3'
@@ -98,6 +98,8 @@ class DataCleaner:
             return "Mặt ngõ"
         elif re.search(distance_to_main_road, text, re.IGNORECASE):
             return "Mặt ngõ"
+        elif re.search(on_main_road, text, re.IGNORECASE):
+            return "Mặt phố"
         # elif lat is not None and lon is not None:
         #     lat, lon = float(lat), float(lon)
         #     try:
