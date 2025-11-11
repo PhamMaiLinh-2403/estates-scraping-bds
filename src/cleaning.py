@@ -98,25 +98,25 @@ class DataCleaner:
             return "Mặt ngõ"
         elif re.search(distance_to_main_road, text, re.IGNORECASE):
             return "Mặt ngõ"
-        elif lat is not None and lon is not None:
-            lat, lon = float(lat), float(lon)
-            try:
-                location = geolocator.reverse((lat, lon), language="vi", timeout=10)
-                print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
-                time.sleep(random.uniform(1, 2))  
+        # elif lat is not None and lon is not None:
+        #     lat, lon = float(lat), float(lon)
+        #     try:
+        #         location = geolocator.reverse((lat, lon), language="vi", timeout=10)
+        #         print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
+        #         time.sleep(random.uniform(1, 2))  
 
-                if location and location.address:
-                    address = location.address.lower()
-                    for loc in ["ngõ", "hẻm", "ngách"]:
-                        if loc in address:
-                            return "Mặt ngõ"
+        #         if location and location.address:
+        #             address = location.address.lower()
+        #             for loc in ["ngõ", "hẻm", "ngách"]:
+        #                 if loc in address:
+        #                     return "Mặt ngõ"
                 
-                if re.search(on_main_road, text) or "nhà phố" in text.lower():
-                    return "Mặt phố"
+        #         if re.search(on_main_road, text) or "nhà phố" in text.lower():
+        #             return "Mặt phố"
 
-            except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
-                print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
-                time.sleep(1) 
+        #     except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
+        #         print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
+        #         time.sleep(1) 
 
         return None
 
@@ -648,41 +648,41 @@ class DataCleaner:
         if val:
             try:
                 num_val = float(str(val).replace(",", ".").strip().split()[0])
-                if num_val <= 20:
+                if num_val <= 15:
                     return num_val
             except ValueError:
                 pass  
 
-        exact_match = re.search(
-            r"\b(?:ngõ|đường|hẻm|ngách|kiệt)(?:\s+vào|\s+trước\s+nhà)?(?:\s+rộng|:)?\s*(\d+(?:[.,]\d+)?)(?=\s*(?:mét|m)\b)",
-            text,
-            re.IGNORECASE
-        )
-        if exact_match:
-            return float(exact_match.group(1).replace(',', '.'))
+    #     exact_match = re.search(
+    #         r"\b(?:ngõ|đường|hẻm|ngách|kiệt)(?:\s+vào|\s+trước\s+nhà)?(?:\s+rộng|:)?\s*(\d+(?:[.,]\d+)?)(?=\s*(?:mét|m)\b)",
+    #         text,
+    #         re.IGNORECASE
+    #     )
+    #     if exact_match:
+    #         return float(exact_match.group(1).replace(',', '.'))
         
-        another_match = re.search(
-            "\b(?:trước|vào)\s+nhà\s+rộng\s+(\d+(?:[.,]\d+)?)\s*(?:m|mét)\b",
-            text,
-            re.IGNORECASE
-        )
-        if another_match:
-            return float(another_match.group(1).replace(",", "."))
+    #     another_match = re.search(
+    #         "\b(?:trước|vào)\s+nhà\s+rộng\s+(\d+(?:[.,]\d+)?)\s*(?:m|mét)\b",
+    #         text,
+    #         re.IGNORECASE
+    #     )
+    #     if another_match:
+    #         return float(another_match.group(1).replace(",", "."))
             
-        soft_match = re.search(
-            r"\b(đường|ngõ|hẻm|ngách|kiệt)\b(?:\s+\S+){0,5}?\s*(\d+(?:[.,]\d+)?)(?=\s*(m|mét)\b)", # Bắt những cụm từ như "đường rộng 10m", "hẻm 4m",...
-            text,
-            re.IGNORECASE
-        )
-        if soft_match:
-            start_index = soft_match.start()
-            before_text = text[:start_index]
-            last_3_words = re.findall(r"\b\w+\b", before_text)[-3:]
-            blacklist = {"cách", "ra", "tới"} # Loại bỏ những cụm như "cách đường Phạm Hùng 200m", "tới hẻm thông 10m",...
-            num = float(soft_match.group(2).replace(",", "."))
+    #     soft_match = re.search(
+    #         r"\b(đường|ngõ|hẻm|ngách|kiệt)\b(?:\s+\S+){0,5}?\s*(\d+(?:[.,]\d+)?)(?=\s*(m|mét)\b)", # Bắt những cụm từ như "đường rộng 10m", "hẻm 4m",...
+    #         text,
+    #         re.IGNORECASE
+    #     )
+    #     if soft_match:
+    #         start_index = soft_match.start()
+    #         before_text = text[:start_index]
+    #         last_3_words = re.findall(r"\b\w+\b", before_text)[-3:]
+    #         blacklist = {"cách", "ra", "tới"} # Loại bỏ những cụm như "cách đường Phạm Hùng 200m", "tới hẻm thông 10m",...
+    #         num = float(soft_match.group(2).replace(",", "."))
 
-            if not any(word.lower() in blacklist for word in last_3_words) and num <= 35:
-                return num 
+    #         if not any(word.lower() in blacklist for word in last_3_words) and num <= 35:
+    #             return num 
             
         best_match = process.extractOne(
         query=text,
