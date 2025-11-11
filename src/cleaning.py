@@ -743,7 +743,6 @@ class DataCleaner:
             tertiary = 'mặt tiền|mt|trục chính|oto|ô tô'
             landmarks = 'trường|chợ|siêu thị|vincom|aeon|lotte|công viên|cv|hẻm|hxh|ngõ|vườn|trung tâm|vinmart|winmart|vin|mall|tttm|bigc|go|gigamall|đại học|đh|bến xe|bx|ga'
             places_of_interest = 'biển|sông|hồ|ubnd|chung cư|cc|khu đô thị|kđt|kdt|sân bay|bệnh viện|bv|quận|q(?:\d+)|thành phố|tp|huyện|thị xã|thị trấn|tx|bán kính'
-            exclude_group = f'{landmarks}|{places_of_interest}'
             
             match_1 = re.search(rf'cách\s*(?:{major_roads})\s*(?:(?!\d{{1,3}}(?:[.,]\d+)*\s*(?:m|km))\S+\s*){{0,5}}?\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))', text, re.IGNORECASE) # cách đường Phạm Văn Đồng 5m, cách mặt phố Hai Bà Trưng 100m 
             match_2 = re.search(rf'\D(\d{{1,3}}(?:[.,]\d+)?\s*(?:m|km))\s*ra\s*(?:{major_roads})\s*(?:\S+\s+){{0,5}}', text, re.IGNORECASE) # 50m ra đường Cầu Giấy
