@@ -760,19 +760,27 @@ class DataCleaner:
                     return float(pattern.group(1).replace('m', '').replace(',', '.'))
                     
             greedy_matches = re.search(
-                                r'(?:\b\w+\b\W+){0,5}?cách\s*(?:(?!hướng về)(?!\d+[.,])\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*km)(?:(?!hướng về)\S+\s*){0,7}',
-                                text,
-                                re.IGNORECASE
-                            )
+                r'(?:\b\w+\b\W+){0,5}?cách\s*(?:\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*(?:km|m))(?:\S+\s*){0,7}',
+                text,
+                re.IGNORECASE
+            )
+
             if greedy_matches:
-                if re.search(landmarks, greedy_matches.group(0)) or re.search(places_of_interest, greedy_matches.group(0)):
-                    pass
-                else:
-                    if 'km' in greedy_matches.group(1):
-                        result = float(greedy_matches.group(1).replace('km', '').replace(',', '.'))
+                distance = greedy_matches.group(1)
+                start_idx = greedy_matches.start() # Find the index of the match in text 
+
+                post_text = text[start_idx:]  
+                words_after = ' '.join(post_text.split()[:10])  # Extract the first 10 words from the match onwards 
+
+                # Skip if landmarks or places_of_interest appear in this context
+                if re.search(landmarks, words_after, re.IGNORECASE) or re.search(places_of_interest, words_after, re.IGNORECASE):
+                    pass 
+                else: 
+                    if 'km' in distance:
+                        result = float(distance.replace('km', '').replace(',', '.'))
                         result *= 1000
                         return result
-                    return float(greedy_matches.group(1).replace('m', '').replace(',', '.'))
+                    return float(distance.replace('m', '').replace(',', '.'))
             
             # TH3: Ước lượng gần phố (nhà, bước chân, phút,...)
             # Cách bao nhiêu căn nhà ra mặt phố 
