@@ -85,7 +85,7 @@ class DataCleaner:
     def _is_on_main_road(text: str, short_address, lat, lon):
         text = DataCleaner.clean_description_text(text.lower().strip())
 
-        # geolocator = Nominatim(user_agent="vn_address_distance")
+        geolocator = Nominatim(user_agent="vn_address_distance")
 
         not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõ|ngõ vào|ngõ thông|hẻm vào|hẻm thông|hxh|hxt|(?<=\d)sẹc|(?<=\d)xẹt|hẻm|ngõ|ngách|kiệt ô tô|kiệt xe máy|kiệt(?<=\d)"
         major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|ngã tư|ngã ba|ngã 4|ngã 3'
@@ -98,29 +98,25 @@ class DataCleaner:
             return "Mặt ngõ"
         elif re.search(distance_to_main_road, text, re.IGNORECASE):
             return "Mặt ngõ"
-        elif re.search(r"ngõ|hẻm|ngách|kiệt(?<=\d)|\b\d+(?:/\d+[A-Za-z]*)+\b", short_address, re.IGNORECASE):
-            return "Mặt ngõ"
-        elif "vỉa hè" in text and re.search(on_main_road, text):
-            return "Mặt phố"
-        # elif lat is not None and lon is not None:
-        #     lat, lon = float(lat), float(lon)
-        #     try:
-        #         location = geolocator.reverse((lat, lon), language="vi", timeout=10)
-        #         print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
-        #         time.sleep(random.uniform(1, 2))  
+        elif lat is not None and lon is not None:
+            lat, lon = float(lat), float(lon)
+            try:
+                location = geolocator.reverse((lat, lon), language="vi", timeout=10)
+                print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
+                time.sleep(random.uniform(1, 2))  
 
-        #         if location and location.address:
-        #             address = location.address.lower()
-        #             for loc in ["ngõ", "hẻm", "ngách"]:
-        #                 if loc in address:
-        #                     return "Mặt ngõ"
+                if location and location.address:
+                    address = location.address.lower()
+                    for loc in ["ngõ", "hẻm", "ngách"]:
+                        if loc in address:
+                            return "Mặt ngõ"
                 
-        #         if re.search(on_main_road, text) or "nhà phố" in text.lower():
-        #             return "Mặt phố"
+                if re.search(on_main_road, text) or "nhà phố" in text.lower():
+                    return "Mặt phố"
 
-        #     except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
-        #         print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
-        #         time.sleep(1) 
+            except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
+                print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
+                time.sleep(1) 
 
         return None
 
