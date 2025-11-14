@@ -149,6 +149,11 @@ def clean_details():
     df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
+    df['title'] = df['title']
+    df['Mặt phố/Mặt ngõ'] = df.apply(DataCleaner.extract_street_or_alley_front, axis=1)
+    # # Drop rows that does not have a specified Mặt phố/Mặt ngõ
+    # drop_rows = df[(df['Mặt phố/Mặt ngõ'] == 'Drop')].index
+    # df.drop(drop_rows, axis=0, inplace=True)
     
     # 2. Standardize addresses 
     print("Standardizing addresses...")
@@ -202,6 +207,7 @@ def clean_details():
     final_df['Tọa độ (vĩ độ)'] = df['latitude']
     final_df['Tọa độ (kinh độ)'] = df['longitude']
     final_df['Hình ảnh của bài đăng'] = df['image_urls']
+    final_df['Mặt phố/Mặt ngõ'] = df['Mặt phố/Mặt ngõ']
 
     subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố',
     'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số tầng công trình',
@@ -209,7 +215,7 @@ def clean_details():
     'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất',
     'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)',
     'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 
-    'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)', 
+    'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)', 'Mặt phố/Mặt ngõ'
 ]
 
     final_df.dropna(subset=subset, inplace=True)

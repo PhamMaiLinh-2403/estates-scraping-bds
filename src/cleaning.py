@@ -7,6 +7,7 @@ import random
 import osmnx as ox
 import networkx as nx
 from rapidfuzz import fuzz, process
+from rapidfuzz.fuzz import ratio
 from math import * 
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
@@ -819,6 +820,169 @@ class DataCleaner:
             if "ngõ nông" in text.lower():
                 return 20 
             
+        return None 
+    
+    @staticmethod
+    def search_pho(string, short_add):
+        string_lower = string.lower()
+        main_road = '(?:\S+\s){0,5}(?:nhà(?:\s\S+){0,2} mặt phố|mặt phố|mặt tiền phố|mt phố|phân lô phố|nhà(?:\s\S+){0,2} mặt đường|nhà(?:\s\S+){0,2} đường|mặt đường| mt đường|mặt tiền đường|\Wmtd\W|\Wmtđ\W)\s?(?:\S+\s){0,4}'
+        short_main_road = '(?:nhà(?:\s\S+){0,2} mặt phố|mặt phố|mặt tiền phố|mt phố|phân lô phố|nhà(?:\s\S+){0,2} mặt đường|nhà(?:\s\S+){0,2} đường|mặt đường| mt đường|mặt tiền đường|\Wmtd\W|\Wmtđ\W)'
+        if len(re.findall(short_main_road, string_lower)) >= 5:
+            return 'Drop'
+        close = 'gần|cạnh|\Wra\W|sát|giáp|cách|sau|tránh|đối diện|kết nối|tương lai|quy hoạch|ký gửi|ký gởi|kí gửi|kí gởi|chuyên|nhà ngõ|nhà ngách|nhà hẻm|nhà kiệt|biệt thự|liên hệ|\Wlh\W|bước|căn|(?:vài|\d+)\snhà|phút|\d+p'
+        if short_add != '':
+            short_add_split = short_add.lower().strip().split(',')
+            if 'đường' in short_add_split[0] or 'phố' in short_add_split[0]:
+                road_name_in_short_add = short_add_split[0].replace('đường', '').replace('phố', '').strip()
+                if re.search(rf'(?:{close})\s?(?:\S+\s){{0,5}}{re.escape(road_name_in_short_add)}', string_lower):
+                    return None
+                if re.search(rf'{re.escape(road_name_in_short_add)}(?![^\.,\?!]*[.,\?!])\s?(?:\S+\s){{0,2}}(?:{close})', string_lower):
+                    return None
+        pho = re.search(main_road, string_lower)
+        if pho:
+            # Nếu các cụm đó chỉ là gần phố, gần đường abc --> thì bỏ
+            if re.search(close, pho.group(0)):
+                return None
+            # return 'Mặt phố'
+            else:
+                # Tìm xem nó đang nằm trên mặt đường nào
+                road = re.search(short_main_road, string_lower)
+                # if road:
+                road_span = road.span()
+                # start = 0 if road_span[0] < 40 else road_span[0] - 40
+                # Tìm 20 ký tự sau các keyword về mặt phố mặt ngõ
+                end = len(string) if road_span[1] + 20 > len(string) else road_span[1] + 20
+                road_name_list = string[road_span[1]:end].split()
+                if len(road_name_list) < 1:
+                    road_name = None
+                elif len(road_name_list) == 1:
+                    if road_name_list[0][0].isupper() or re.match(r'\d+/\d+', road_name_list[0]):
+                        road_name = road_name_list[0]
+                    else:
+                        road_name = None
+                else:
+                    # Nếu hai từ đầu tiên sau đó được viết hoa thì khả năng cao nó chính là tên đường
+                    if road_name_list[0][0].isupper() and road_name_list[1][0].isupper():
+                        road_name = road_name_list[0]  + ' ' + road_name_list[1]
+                    # Nếu từ đầu tiên có dạng kiểu 23/5 (đường 2/9)
+                    elif re.match(r'\d+/\d+', road_name_list[0]):
+                        road_name = road_name_list[0]
+                    else:
+                        road_name = None
+                if road_name:
+                    # Tìm sự xuất hiện của tên đường trong phần còn lại của description
+                    search_string = f'(?:\S+\s){{0,5}}{re.escape(road_name)}\W?\s?(?:\S+\s){{0,4}}'
+                    while True:
+                        if len(string) <= 5:
+                            if re.search('(?:gần|cạnh|cách|\Wra|giáp|sát) (?:phố|mặt phố)', string_lower) or re.search(r'(?:phố|mặt phố)\s(?:\S+\s)?(?:gần|cạnh|cách|ra\W|giáp|sát|vào)', string_lower):
+                                return None
+                            return 'Mặt phố'
+                        road_appearance = re.search(search_string, string)
+                        if road_appearance:
+                            # Nếu có các từ trong trường gần ở xung quanh tên đường ở đằng sau
+                            if re.search(close, road_appearance.group(0)):
+                                return None
+                            else:
+                                string = string[road_appearance.span()[1]:]
+                        else:
+                            # Nếu có các cụm gần phố thì thôi (kiểu gần phố không thôi, không có mấy cái kiểu gần phố A B gì cả)        
+                            if re.search('(?:gần|cạnh|cách|\Wra|giáp|sát) (?:phố|mặt phố)', string_lower) or re.search(r'(?:phố|mặt phố)\s(?:\S+\s)?(?:gần|cạnh|cách|ra\W|giáp|sát|vào)', string_lower):
+                                return None
+                            return 'Mặt phố'                
+                else:
+                    if re.search('(?:gần|cạnh|cách|\Wra|giáp|sát) (?:phố|mặt phố)', string_lower) or re.search(r'(?:phố|mặt phố)\s(?:\S+\s)?(?:gần|cạnh|cách|ra\W|giáp|sát|vào)', string_lower):
+                        return None
+                    return 'Mặt phố'
+        return None
+
+    @staticmethod
+    def extract_street_or_alley_front(row):
+        #------TH0: check từ short_address------
+        road_add = row['short_address'].split(',')[0].lower()
+        if '/' in road_add:
+            # Đường 2/9 (đại khái không phải xoẹt)
+            if re.search(r'(?:đường|phố) (?:\S+\s){0,2}(?:\S+/\S+)', road_add):
+                pass 
+            else:
+                return 'Mặt ngõ'
+        if re.search(r'hẻm|ngõ|ngách|kiệt\s', road_add):
+            return 'Mặt ngõ'
+        
+        if pd.notna(row['description']):
+            des = row['description']
+        else:
+            des = ''
+        if pd.notna(row['title']):
+            title = row['title']
+        else:
+            title = ''
+
+        string = title + '. ' + des
+        short_add = row['short_address']
+        if short_add is None:
+            short_add = ''
+        pho = DataCleaner.search_pho(string, short_add)
+        string = string.lower()
+        #------ TH1: Hẻm xe hơi, hẻm xe tải và sẹc ------
+        if re.search(r'hxh|hxt|sẹc|sẹt|xẹc|xẹt| sec ', string):
+            return 'Mặt ngõ'
+        
+        #------ TH2: Ngách ------
+        result = re.findall(r'(?:\S+\s+){0,5}(\S+\sngách)\s*(?:\S+\s+){0,5}', string)
+        if result != []:
+            for i in result:
+                if i.startswith('ng'):
+                    if ratio(i, 'ngóc ngách') >= 90:
+                        continue
+                    return 'Mặt ngõ'
+                return 'Mặt ngõ'
+            
+        #------ TH3: Kiệt ------
+        kiet = re.findall(r'(?:\S+\s){0,3}kiệt(?:\s\S+){0,2}', string)
+        if len(kiet) > 0:
+            for k in kiet:
+                if re.search(r'(?:lý thường |võ văn |phạm |anh |em |mr.\s?|tuấn |tam |nhân |văn )kiệt', k) or 'kiệt tác' in k:
+                    continue
+                else:
+                    if pho:
+                        break 
+                    return 'Mặt ngõ'
+        
+        #------ TH4: Hẻm ------
+        if re.search(r'(?<!như)(?<!hơn)(?:\S+\s){0,2}(?:hẻm|\Whem\W)',string):
+            return 'Mặt ngõ'
+        
+        #------ TH5: Các trường hợp drop define từ search_pho ------
+        if pho == 'Drop':
+            return 'Drop'
+        
+        #------ TH6: Ngõ ------
+        ngo = re.findall(r'(?:(?<!hơn\s)(?<!như\s)(?<!giá\s)(?:\S+\s*){1,3})ngõ', string)
+        cua_ngo = re.search(r'(?<!đỗ\s)(?:cửa ngõ|cưa ngõ|một mặt ngõ|1 mặt ngõ|một ngõ|1 ngõ)', string)
+        if ngo:
+            if "nhà ngõ" in string:
+                return 'Mặt ngõ'
+            if 'mặt ngõ' in string:
+                return 'Mặt ngõ'
+            if 'ngõ vào' in string:
+                return 'Mặt ngõ'
+            if not cua_ngo:
+                if pho:
+                    if re.search(r'như (?:\S+\s){0,2}ngõ', string):
+                        return 'Mặt phố'
+                    return 'Mặt ngõ' # Ngõ hết
+                return 'Mặt ngõ'
+            elif cua_ngo and len(ngo) == 1:
+                pass
+            else:
+                if pho:
+                    return 'Drop' # Drop hết các dòng trong phần này vì nó lẫn lộn giữa mặt phố và mặt ngõ
+                return 'Mặt ngõ'
+        if pho:
+            slash = re.search(r'nhà \d+/\D', string)
+            if slash and slash.group(0) != '24/24' and slash.group(0) != '24/7':
+                return 'Mặt ngõ'
+            return 'Mặt phố' # return 'Có mặt phố'
         return None 
 
 
