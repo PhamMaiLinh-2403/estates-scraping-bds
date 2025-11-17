@@ -656,37 +656,6 @@ class DataCleaner:
                     return num_val
             except ValueError:
                 pass  
-
-    #     exact_match = re.search(
-    #         r"\b(?:ngõ|đường|hẻm|ngách|kiệt)(?:\s+vào|\s+trước\s+nhà)?(?:\s+rộng|:)?\s*(\d+(?:[.,]\d+)?)(?=\s*(?:mét|m)\b)",
-    #         text,
-    #         re.IGNORECASE
-    #     )
-    #     if exact_match:
-    #         return float(exact_match.group(1).replace(',', '.'))
-        
-    #     another_match = re.search(
-    #         "\b(?:trước|vào)\s+nhà\s+rộng\s+(\d+(?:[.,]\d+)?)\s*(?:m|mét)\b",
-    #         text,
-    #         re.IGNORECASE
-    #     )
-    #     if another_match:
-    #         return float(another_match.group(1).replace(",", "."))
-            
-    #     soft_match = re.search(
-    #         r"\b(đường|ngõ|hẻm|ngách|kiệt)\b(?:\s+\S+){0,5}?\s*(\d+(?:[.,]\d+)?)(?=\s*(m|mét)\b)", # Bắt những cụm từ như "đường rộng 10m", "hẻm 4m",...
-    #         text,
-    #         re.IGNORECASE
-    #     )
-    #     if soft_match:
-    #         start_index = soft_match.start()
-    #         before_text = text[:start_index]
-    #         last_3_words = re.findall(r"\b\w+\b", before_text)[-3:]
-    #         blacklist = {"cách", "ra", "tới"} # Loại bỏ những cụm như "cách đường Phạm Hùng 200m", "tới hẻm thông 10m",...
-    #         num = float(soft_match.group(2).replace(",", "."))
-
-    #         if not any(word.lower() in blacklist for word in last_3_words) and num <= 35:
-    #             return num 
             
         best_match = process.extractOne(
         query=text,
@@ -778,27 +747,6 @@ class DataCleaner:
                         result *= 1000
                         return result
                     return float(pattern.group(1).replace('m', '').replace(',', '.'))
-                    
-            # greedy_matches = re.search(
-            #     r'(?:\b\w+\b\W+){0,5}?cách\s*(?:\S+\s*){0,7}\D(\d{1,3}(?:[.,]\d+)?\s*(?:km|m))(?:\S+\s*){0,7}',
-            #     text,
-            #     re.IGNORECASE
-            # )
-
-            # if greedy_matches:
-            #     distance = greedy_matches.group(1)
-            #     post_text = text[greedy_matches.end():]  
-            #     words_after = ' '.join(post_text.split()[:10])  # Extract the first 10 words from the match onwards 
-
-            #     # Skip if landmarks or places_of_interest appear in this context
-            #     if re.search(landmarks, words_after, re.IGNORECASE) or re.search(places_of_interest, words_after, re.IGNORECASE):
-            #         pass 
-            #     else: 
-            #         if 'km' in distance:
-            #             result = float(distance.replace('km', '').replace(',', '.'))
-            #             result *= 1000
-            #             return result
-            #         return float(distance.replace('m', '').replace(',', '.'))
             
             # TH3: Ước lượng gần phố (nhà, bước chân, phút,...)
             # Cách bao nhiêu căn nhà ra mặt phố 
