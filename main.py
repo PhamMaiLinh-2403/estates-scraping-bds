@@ -151,9 +151,6 @@ def clean_details():
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
     df['title'] = df['title']
     df['Mặt phố/Mặt ngõ'] = df.apply(DataCleaner.extract_street_or_alley_front, axis=1)
-    # # Drop rows that does not have a specified Mặt phố/Mặt ngõ
-    # drop_rows = df[(df['Mặt phố/Mặt ngõ'] == 'Drop')].index
-    # df.drop(drop_rows, axis=0, inplace=True)
     
     # 2. Standardize addresses 
     print("Standardizing addresses...")
