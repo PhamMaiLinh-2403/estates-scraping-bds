@@ -535,7 +535,8 @@ class DataCleaner:
             if match:
                 return float(match.group(2).replace(',', '.'))
 
-            m = re.search(r"(?:diện\s*tích|dt)\s*:?\s*(\d+[.,]?\d*)\s*[x×]\s*(\d+[.,]?\d*)\s*(m|mét)?\b", text, re.IGNORECASE)
+            # m = re.search(r"(?:diện\s*tích|dt)\s*:?\s*(\d+[.,]?\d*)\s*[x×]\s*(\d+[.,]?\d*)\s*(m|mét)?\b", text, re.IGNORECASE)
+            m = re.search(r"\(?\s*(\d+[.,]?\d*)\s*[x×]\s*(\d+[.,]?\d*)\s*\)?\s*(m|mét)?\b", text, re.IGNORECASE)
             if m:
                 num1 = float(m.group(1).replace(',', '.'))
                 num2 = float(m.group(2).replace(',', '.'))
@@ -954,7 +955,7 @@ class DataCleaner:
         
         #------ TH5: Các trường hợp drop define từ search_pho ------
         if pho == 'Drop':
-            return 'Drop'
+            return None
         
         #------ TH6: Ngõ ------
         ngo = re.findall(r'(?:(?<!hơn\s)(?<!như\s)(?<!giá\s)(?:\S+\s*){1,3})ngõ', string)
