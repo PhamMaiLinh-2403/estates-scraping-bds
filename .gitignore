@@ -98,4 +98,5 @@ downloaded_files/
 # Ignore folder for output
 output/
 output_old/
+output_27k/
 cleaned.xlsx
