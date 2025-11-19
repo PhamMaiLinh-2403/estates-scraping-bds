@@ -417,19 +417,20 @@ class DataCleaner:
 
         for quality_val, keywords in QUALITY_LEVELS:
             for kw in keywords:
-                pattern = kw.replace(' ', '(?:\s*\w+\s*){0,2} ')
+                pattern = kw.replace(' ', '\s(?:\w+\s){0,2}')
                 pattern = pattern.strip()
-                pattern = '\W' + pattern + '\W'
+                # pattern = '\W' + pattern + '\W'
                 qual = re.search(pattern, text)
                 if qual:
-                    ratio = fuzz.ratio(kw, qual.group(0))
-                    if quality_val == 0 or quality_val == 1:
-                        ratio += 3
-                    result[quality_val] = [qual.group(0), ratio]
-        if result:
-            # Sort by ratio first, then by quality value
-            best_quality, (match, score) = max(result.items(), key=lambda x: (x[1][1], x[0]))
-            return best_quality
+                    return quality_val
+        #             ratio = fuzz.ratio(kw, qual.group(0).strip())
+        #             if quality_val == 0 or quality_val == 1:
+        #                 ratio += 3
+        #             result[quality_val] = [qual.group(0).strip(), ratio]
+        # if result:
+        #     # Sort by ratio first, then by quality value
+        #     best_quality, (match, score) = max(result.items(), key=lambda x: (x[1][1], x[0]))
+        #     return best_quality
         else:
             return default_quality
         
@@ -444,7 +445,7 @@ class DataCleaner:
                         return True
             return False
         
-        text = f"{row.get('title', '')} {row.get('description', '')}".lower().strip()
+        text = f"{row.get('title', '')}. {row.get('description', '')}".lower().strip()
         title = row.get("title").lower().strip()
         description = str(row.get("description") or "").lower().strip()
 
@@ -452,69 +453,97 @@ class DataCleaner:
             text = text.replace(',',' ').replace('+',' ').replace('\n',' ').replace('*', ' ')
             text = ' '.join(text.split())
 
+            # Nhà cấp 4
             if 'nhà trệt' in text:
-                if not re.search(r'nhà trệt\s*(?:\S+\s+){0,2}(?:\d*\s*)(?:tầng|lầu|tấm|mê|lửng|gác)', text):
+                if len(re.findall(r'nhà (?:\S+\s){0,2}trệt (?:\S+\s){0,2}(?:tầng|lầu|tấm|mê|lửng|gác)', text)) == 0:
                     return 4_000_000
-            if re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4\W|nc4|nhà trệt|nhà nát|c4', string=text):
+            if re.search(pattern = r'nhà cấp 4|nhà c4|cấp 4\W|nc4|nhà nát|c4', string=text):
                 return 4_000_000
+            # Nhà 1 tầng
             if row['Số tầng công trình'] == 1:
                 return 6_275_876
-            
-        if isinstance(title, str) and pd.notnull(title):
-            if check_basement(title) and (re.search(r'biệt thự', title) or re.search(r'villa\W', title)):
-                return 12_848_184
-            return 10_510_920
         
-        if isinstance(description, str) and not description.isnull():
-            if re.search(r'biệt thự', description) or re.search(r'villa\W', description):
-                villa_pattern = [
-                    r'(?:thiết kế|xây)*\s*(?:\S+\s+){0,5} (?:phong cách|kiểu|dạng|kiến trúc|cấu trúc)\s*(?:\S+\s+){0,2} (?:biệt thự|villa\W)', # Các nhà có cấu trúc villa
-                    r'bán (?:(?!mua|xây)\S+\s+){0,3}(?:biệt thự|villa\W)', # Bán biệt thự
-                    r'(?:biệt thự|villa\W)\s*(?:\S+\s+){0,3}\d+\s*tầng' # Biệt thự bao nhiêu tầng
-                ]
-                not_villa_pattern = [
-                    r'(?:đối diện|nằm|sát|cạnh|ngay|liền kề|hàng xóm|xung quanh|gần|view|nhiều)\s*(?:\S+\s+){0,5}\s*(?:biệt thự|villa)', # Bên cạnh là khu villa
-                    r'(?:làm|xây|cải tạo)\s*(\S+\s+){0,4}(?:biệt thự|villa)', # Có thể xây thành biệt thự
-                    r'(?:nhà|phố|mặt tiền|tòa nhà|building|chuyên|kinh doanh|chdv|căn hộ dịch vụ|kdt|kđt|khu đô thị|(?:\+84|0)\s*(?:\d\s*){3,6}(?:\d\s*){0,3}|văn phòng|cao ốc|nhà cao tầng)(?:\s+\S+){0,5} (?:biệt thự|villa)', # Tránh giới thiệu về cò
-                    r'(?:biệt thự|villa)(?:\s+\S+){0,5} (?:nhà|phố|mặt tiền|tòa nhà|building|chuyên|kinh doanh|chdv|căn hộ dịch vụ|kdt|kđt|khu đô thị|(?:\+84|0)\s*(?:\d\s*){3,6}(?:\d\s*){0,3}|văn phòng|cao ốc|nhà cao tầng)', # Tránh giới thiệu về cò
-                    r'(?:mua|xây) (\S+\s+){0,3}(?:biệt thự|villa)', # Loại các trường bán để chuyển qua mua hoặc xây biệt thự
-                    r'(?:như|khu|toàn)\s*(?:\S+\s+){0,1}(?:biệt thự|villa)', # Các trường hợp đẹp như biệt thự, khu biệt thự
-                    r'(?:ra|chuyển)\s*(?:\S+\s+){0,2}(?:biệt thự|villa)' # Chuyển ra để ở khu villa
-                ]
-                for pattern in villa_pattern:
-                    if re.search(pattern, description):
-                        if check_basement(description):
-                            return 12_848_184 # Biệt thự có hầm
-                        return 10_510_920 # Biệt thự không hầm
-                for pattern in not_villa_pattern:
-                    if re.search(pattern, description):
-                        if row['Số tầng công trình'] == 2:
+            # Tìm biệt thự/villa trong title (thường là chính xác)
+            if isinstance(title, str) and pd.notnull(title):
+                # Biệt thự có hầm
+                if check_basement(title) and (re.search(r'biệt thự', title) or re.search(r'villa\W', title)):
+                    return 12_848_184
+                # Biệt thự không hầm
+                if re.search(r'biệt thự', title) or re.search(r'villa\W', title):
+                    return 10_510_920
+            
+            # Tìm biệt thự/villa trong description
+            if isinstance(description, str) and not pd.notnull(description):
+                if re.search(r'biệt thự', description) or re.search(r'villa\W', description):
+                    villa_pattern = [
+                        r'(?:thiết kế|xây)*\s*(?:\S+\s+){0,5} (?:phong cách|kiểu|dạng|kiến trúc|cấu trúc)\s*(?:\S+\s+){0,2} (?:biệt thự|villa\W)', # Các nhà có cấu trúc villa
+                        r'bán (?:(?!mua|xây)\S+\s+){0,3}(?:biệt thự|villa\W)', # Bán biệt thự
+                        r'(?:biệt thự|villa\W)\s*(?:\S+\s+){0,3}\d+\s*tầng' # Biệt thự bao nhiêu tầng
+                    ]
+                    not_villa_pattern = [
+                        r'(?:đối diện|nằm|sát|cạnh|ngay|liền kề|hàng xóm|xung quanh|gần|view|nhiều)\s*(?:\S+\s+){0,5}\s*(?:biệt thự|villa)', # Bên cạnh là khu villa
+                        r'(?:làm|xây|cải tạo)\s*(\S+\s+){0,4}(?:biệt thự|villa)', # Có thể xây thành biệt thự
+                        r'(?:nhà|phố|mặt tiền|tòa nhà|building|chuyên|kinh doanh|chdv|căn hộ dịch vụ|kdt|kđt|khu đô thị|(?:\+84|0)\s*(?:\d\s*){3,6}(?:\d\s*){0,3}|văn phòng|cao ốc|nhà cao tầng)(?:\s+\S+){0,5} (?:biệt thự|villa)', # Tránh giới thiệu về cò
+                        r'(?:biệt thự|villa)(?:\s+\S+){0,5} (?:nhà|phố|mặt tiền|tòa nhà|building|chuyên|kinh doanh|chdv|căn hộ dịch vụ|kdt|kđt|khu đô thị|(?:\+84|0)\s*(?:\d\s*){3,6}(?:\d\s*){0,3}|văn phòng|cao ốc|nhà cao tầng)', # Tránh giới thiệu về cò
+                        r'(?:mua|xây) (\S+\s+){0,3}(?:biệt thự|villa)', # Loại các trường bán để chuyển qua mua hoặc xây biệt thự
+                        r'(?:như|khu|toàn)\s*(?:\S+\s+){0,1}(?:biệt thự|villa)', # Các trường hợp đẹp như biệt thự, khu biệt thự
+                        r'(?:ra|chuyển)\s*(?:\S+\s+){0,2}(?:biệt thự|villa)' # Chuyển ra để ở khu villa
+                    ]
+                    for pattern in villa_pattern:
+                        if re.search(pattern, description):
                             if check_basement(description):
-                                return 6_275_876 # Nhà 1 tầng 1 hầm
-                            else:
-                                return 8_221_171 # Nhà 2 tầng không hầm
-                        if row['Số tầng công trình'] < 2:
-                            if check_basement(description):
-                                return 6_275_876 # ví dụ như nhà 1.5 thì 0.5 đó chính là tầng hầm 
-                            return 8_221_171 # Nhà 2 tầng không hầm
-                        if check_basement(description):
-                            return 9504604 # Nhà hơn 2 tầng, có hầm
-                        return 8_221_171 # Nhà hơn 2 tầng, không hầm
-                if check_basement(description):
-                    return 12_848_184 # Biệt thự có hầm
-                return 10_510_920 # Biệt thự không hầm
-            if row['Số tầng công trình'] == 2:
-                if check_basement(description):
-                    return 6_275_876 # Nhà 1 tầng 1 hầm
+                                return 12_848_184 # Biệt thự có hầm
+                            return 10_510_920 # Biệt thự không hầm
+                    # for pattern in not_villa_pattern:
+                    #     if re.search(pattern, description):
+                    #         if row['Số tầng công trình'] == 2:
+                    #             if check_basement(description):
+                    #                 return 6_275_876 # Nhà 1 tầng 1 hầm
+                    #             else:
+                    #                 return 8_221_171 # Nhà 2 tầng không hầm
+                    #         if row['Số tầng công trình'] < 2:
+                    #             if check_basement(description):
+                    #                 return 6_275_876 # ví dụ như nhà 1.5 thì 0.5 đó chính là tầng hầm 
+                    #             return 8_221_171 # Nhà 2 tầng không hầm
+                    #         if check_basement(description):
+                    #             return 9504604 # Nhà hơn 2 tầng, có hầm
+                    #         return 8_221_171 # Nhà hơn 2 tầng, không hầm
+                    # if check_basement(description):
+                    #     return 12_848_184 # Biệt thự có hầm
+                    # return 10_510_920 # Biệt thự không hầm
+
+                # Nhà bê tông cốt thép
+                if row['Số tầng công trình'] == 2:
+                    if check_basement(description):
+                        return 6_275_876 # Nhà 1 tầng 1 hầm
+                    else:
+                        return 8_221_171 # Nhà 2 tầng không hầm
+                elif row['Số tầng công trình'] < 2:
+                    return 6_275_876 # Nhà 1 tầng vì nếu không phải 1 và 2 thì sẽ là số thập phân, which means nhà 1 tầng 1 hầm/tum
+                    # if check_basement(description):
+                    #     return 6_275_876 # ví dụ như nhà 1.5 thì 0.5 đó chính là tầng hầm 
+                    # return 8_221_171 # Nhà 2 tầng không hầm
                 else:
-                    return 8_221_171 # Nhà 2 tầng không hầm
+                    if check_basement(description):
+                        return 9_504_604 # Nhà hơn 2 tầng, có hầm
+                    return 8_221_171 # Nhà hơn 2 tầng, không hầm
+            
             if row['Số tầng công trình'] < 2:
-                if check_basement(description):
-                    return 6_275_876 # ví dụ như nhà 1.5 thì 0.5 đó chính là tầng hầm 
-                return 8_221_171 # Nhà 2 tầng không hầm
-            if check_basement(description):
-                return 9_504_604 # Nhà hơn 2 tầng, có hầm
-            return 8_221_171 # Nhà hơn 2 tầng, không hầm
+                return 6_275_876 # Nhà 1 tầng 1 hầm
+            else:   
+                if check_basement(text):
+                    if row['Số tầng công trình'] == 2:
+                        return 9_504_604 # Nhà 2 tầng có hầm
+                    else:
+                        return 9_504_604 # Nhà từ 2 tầng có hầm
+                else:                 
+                    return 8_221_171 # Nhà 2 tầng không hầm
+        else:
+            if row['Số tầng công trình'] < 2:
+                return 6_275_876 # Nhà 1 tầng bê tông cốt thép
+            else:
+                return 8_221_171 # Nhà 2 tầng bê tông cốt thép không có hầm (do không có mà check)
+
 
     @staticmethod
     def extract_width(row):

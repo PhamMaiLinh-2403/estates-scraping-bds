@@ -109,7 +109,15 @@ QUALITY_LEVELS = [
         'nhà cấp 4 cũ', 'nhà xuống cấp', 'giá trị đất là chính',
         'bán đất', 'sắp sập'
     ]),
-    # Priority 2: Old or needs significant repair (50%)
+    # Priority 2: Brand-new condition (100%)
+    (1.0, [
+        'mới xây', 'xây mới', 'mới xd', 'mới hoàn thiện', 'mới 100%', 'nhà mới',
+        'vừa xây xong', 'mới bàn giao', 'mới nhận nhà', 'nhà rất mới',
+        'chưa ở lần nào', 'nhà mới tinh', 'nhà mới toanh',
+        'nhà xây mới', 'vừa hoàn thiện', 'còn thơm mùi sơn',
+        'mới hoàn công', 'đảm bảo kết cấu mới',
+    ]),
+    # Priority 3: Old or needs significant repair (50%)
     (0.5, [
         'nhà cũ', 'cần sửa chữa', 'tiện xây mới',
         'xây lâu năm', 'xuống cấp', 'cũ nhưng ở tạm được',
@@ -117,22 +125,15 @@ QUALITY_LEVELS = [
         'nền móng yếu', 'cần xây lại', 
         'không có giá trị sử dụng',
     ]),
-    # Priority 3: Good, well-maintained condition (85%)
+    # Priority 4: Good, well-maintained condition (85%)
     (0.85, [
         'nhà đẹp', 'còn mới', 'giữ gìn', 'full nội thất', 'thiết kế hiện đại',
-        'nhà sạch sẽ', 'ở ngay', 'nhà gọn gàng', 'nội thất cao cấp',
+        'nhà sạch sẽ', 'ở ngay', 'ở luôn', 'nhà gọn gàng', 'nội thất cao cấp',
         'không cần sửa', 'đẹp như hình', 'vào ở liền',
-        'nội thất đầy đủ', 'tiện nghi', 'nhà không lỗi phong thủy',
-        'còn bảo hành', 'nhà chất lượng tốt',
+        'nội thất đầy đủ', 'tiện nghi', 'không lỗi phong thủy', 'không lổi phong thủy',
+        'không lỗi phong thuỷ', 'không lổi phong thuỷ', 
+        'còn bảo hành', 'nhà chất lượng tốt', 'xây kiên cố', 'xây chắc chắn',
     ]),
-    # Priority 4: Brand-new condition (100%)
-    (1.0, [
-        'mới xây', 'mới hoàn thiện', 'mới 100%', 'nhà mới keng',
-        'vừa xây xong', 'mới bàn giao', 'mới nhận nhà', 'nhà rất mới',
-        'chưa ở lần nào', 'nhà mới tinh', 'nhà mới toanh',
-        'nhà xây mới', 'vừa hoàn thiện', 'còn thơm mùi sơn',
-        'mới hoàn công', 'nhà xây kiên cố', 'đảm bảo kết cấu mới',
-    ]),   
 ]
 
 ALLEY_WIDTH = {
