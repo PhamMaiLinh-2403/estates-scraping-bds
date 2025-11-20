@@ -1246,7 +1246,8 @@ class FeatureEngineer:
         building_value = construction_cost_per_sqm * total_floor_area * remaining_quality
 
         if building_value >= estimated_price:
-            return round(estimated_price / land_area, 2)
+            # return round(estimated_price / land_area, 2)
+            return None
 
         land_value = estimated_price - building_value
         land_unit_price = land_value / land_area
