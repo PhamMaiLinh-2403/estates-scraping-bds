@@ -652,15 +652,20 @@ class DataCleaner:
             r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+sàn",
             r"(?i)diện\s+tích\s+sử\s+dụng(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
             r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+diện\s+tích\s+sử\s+dụng",
-            r"(?i)dtsd(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
-            r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+dtsd"
+            r"(?i)dtsd:?(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
+            r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+dtsd",
+
         ]
 
         for pattern in patterns:
             match = re.search(pattern, text)
             if match:
                 try:
-                    return float(match.group(1).replace(",", "."))
+                    result = float(match.group(1).replace(",", "."))
+                    if result >= row['Diện tích đất (m2)']:
+                        return result
+                    else:
+                        continue
                 except ValueError:
                     continue  
 
