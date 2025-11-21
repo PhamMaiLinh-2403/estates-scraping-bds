@@ -681,7 +681,7 @@ class DataCleaner:
             other_info = json.loads(other_info)
 
         val = other_info.get("Đường vào", None)
-        text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
+        text = DataCleaner.clean_description_text(f"{row.get('title', '')}. {row.get('description', '')}".lower().strip())
 
         if val:
             try:
@@ -690,17 +690,27 @@ class DataCleaner:
                     return num_val
             except ValueError:
                 pass  
+        
+        pattern = '|'.join(ALLEY_WIDTH.keys())
+        matched_patterns = re.findall(rf'{pattern}', text)
+        for pat in matched_patterns:
+            if re.search(rf'(?:cách|ra|\d+k?m|tới|gần)\s(?:\w+\s){{0,2}}{pat}', text, re.IGNORECASE):
+                continue
+            else:
+                return ALLEY_WIDTH[pat]
             
-        best_match = process.extractOne(
-        query=text,
-        choices=ALLEY_WIDTH.keys(),
-        scorer=fuzz.partial_ratio
-    )
+    #     best_match = process.extractOne(
+    #     query=text,
+    #     choices=ALLEY_WIDTH.keys(),
+    #     scorer=fuzz.partial_ratio
+    # )
     
-        if best_match:
-            matched_text, score, _ = best_match
-            if score >= 90: 
-                return ALLEY_WIDTH[matched_text]
+    #     if best_match:
+    #         matched_text, score, _ = best_match
+    #         if score >= 90: 
+    #             if re.search(rf'(?:cách|ra|\d+k?m?|tới)\s(?:\S+\s){{0,2}}{matched_text}', text, re.IGNORECASE):
+    #                 return None
+    #             return ALLEY_WIDTH[matched_text]
                 
         return None             
 
