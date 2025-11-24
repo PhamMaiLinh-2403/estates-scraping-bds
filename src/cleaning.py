@@ -2,8 +2,6 @@ import re
 import json
 import pandas as pd
 import numpy as np
-import osmnx as ox
-import networkx as nx
 from rapidfuzz import fuzz
 from rapidfuzz.fuzz import ratio
 from math import * 
@@ -172,9 +170,9 @@ class DataCleaner:
         short_address = str(row.get("short_address", "")).strip()
         text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
         parts = [p.strip() for p in short_address.split(",") if pd.notna(p) and isinstance(p, str)]
-        lat, lon = row.get("latitude", ""), row.get("longitude", "")
+
         address_details = []
-        ignore_prefixes = ['đường', 'phố', 'phường', 'quận', 'huyện', 'quốc lộ', 'đại lộ']
+        ignore_prefixes = ['đường', 'phố', 'phường', 'quận', 'huyện', 'quốc lộ', 'đại lộ', "xa lộ", "tỉnh lộ"]
 
         for part in parts:
             lower_part = part.lower().strip()
@@ -193,9 +191,7 @@ class DataCleaner:
             return ", ".join(address_details)
         elif (
             len(parts) > 3
-            and not parts[0].lower().startswith((
-                "đường", "phố", "quốc lộ", "đại lộ", "xa lộ"
-            ))
+            and not parts[0].lower().startswith(f"{ignore_prefixes}")
             and (
                 re.search(r'\b(hẻm|ngõ|ngách|kiệt|dự án|khu đô thị|kđt|khu dân cư|ấp|tổ|khu phố)\b', parts[0])
                 or re.search(r"\d+", parts[0])
@@ -203,7 +199,7 @@ class DataCleaner:
         ):
             return parts[0]
         
-        return DataCleaner.extract_street_or_alley_front(text, short_address, lat, lon)
+        return DataCleaner.extract_street_or_alley_front(row)
             
     @staticmethod
     def extract_total_area(row):
@@ -328,7 +324,7 @@ class DataCleaner:
 
         # --- TH2: Nhà cũ/nát hoặc nhà cấp 4 ---
         if re.search(r"nhà (?:\w+\s*){0,3}(?:cũ|nát)", cleaned_text):
-            return 0
+            return 1
         if re.search(r'nhà cấp 4|nhà c4|cấp 4|nc4', cleaned_text):
             return 1
     
@@ -426,15 +422,6 @@ class DataCleaner:
                         r'bán (?:(?!mua|xây)\S+\s+){0,3}(?:biệt thự|villa\W)', # Bán biệt thự
                         r'(?:biệt thự|villa\W)\s*(?:\S+\s+){0,3}\d+\s*tầng' # Biệt thự bao nhiêu tầng
                     ]
-                    not_villa_pattern = [
-                        r'(?:đối diện|nằm|sát|cạnh|ngay|liền kề|hàng xóm|xung quanh|gần|view|nhiều)\s*(?:\S+\s+){0,5}\s*(?:biệt thự|villa)', # Bên cạnh là khu villa
-                        r'(?:làm|xây|cải tạo)\s*(\S+\s+){0,4}(?:biệt thự|villa)', # Có thể xây thành biệt thự
-                        r'(?:nhà|phố|mặt tiền|tòa nhà|building|chuyên|kinh doanh|chdv|căn hộ dịch vụ|kdt|kđt|khu đô thị|(?:\+84|0)\s*(?:\d\s*){3,6}(?:\d\s*){0,3}|văn phòng|cao ốc|nhà cao tầng)(?:\s+\S+){0,5} (?:biệt thự|villa)', # Tránh giới thiệu về cò
-                        r'(?:biệt thự|villa)(?:\s+\S+){0,5} (?:nhà|phố|mặt tiền|tòa nhà|building|chuyên|kinh doanh|chdv|căn hộ dịch vụ|kdt|kđt|khu đô thị|(?:\+84|0)\s*(?:\d\s*){3,6}(?:\d\s*){0,3}|văn phòng|cao ốc|nhà cao tầng)', # Tránh giới thiệu về cò
-                        r'(?:mua|xây) (\S+\s+){0,3}(?:biệt thự|villa)', # Loại các trường bán để chuyển qua mua hoặc xây biệt thự
-                        r'(?:như|khu|toàn)\s*(?:\S+\s+){0,1}(?:biệt thự|villa)', # Các trường hợp đẹp như biệt thự, khu biệt thự
-                        r'(?:ra|chuyển)\s*(?:\S+\s+){0,2}(?:biệt thự|villa)' # Chuyển ra để ở khu villa
-                    ]
                     for pattern in villa_pattern:
                         if re.search(pattern, description):
                             if check_basement(description):
@@ -448,10 +435,7 @@ class DataCleaner:
                     else:
                         return 8_221_171 # Nhà 2 tầng không hầm
                 elif row['Số tầng công trình'] < 2:
-                    return 6_275_876 # Nhà 1 tầng vì nếu không phải 1 và 2 thì sẽ là số thập phân, which means nhà 1 tầng 1 hầm/tum
-                    # if check_basement(description):
-                    #     return 6_275_876 # ví dụ như nhà 1.5 thì 0.5 đó chính là tầng hầm 
-                    # return 8_221_171 # Nhà 2 tầng không hầm
+                    return 6_275_876 
                 else:
                     if check_basement(description):
                         return 9_504_604 # Nhà hơn 2 tầng, có hầm
@@ -473,7 +457,6 @@ class DataCleaner:
             else:
                 return 8_221_171 # Nhà 2 tầng bê tông cốt thép không có hầm (do không có mà check)
 
-
     @staticmethod
     def extract_width(row):
         if pd.notna(row.get("other_info", "{}")):
@@ -493,7 +476,6 @@ class DataCleaner:
             if match:
                 return float(match.group(2).replace(',', '.'))
 
-            # m = re.search(r"(?:diện\s*tích|dt)\s*:?\s*(\d+[.,]?\d*)\s*[x×]\s*(\d+[.,]?\d*)\s*(m|mét)?\b", text, re.IGNORECASE)
             m = re.search(r"\(?\s*(\d+[.,]?\d*)\s*[x×]\s*(\d+[.,]?\d*)\s*\)?\s*(m|mét)?\b", text, re.IGNORECASE)
             if m:
                 num1 = float(m.group(1).replace(',', '.'))
@@ -583,7 +565,6 @@ class DataCleaner:
             r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+diện\s+tích\s+sử\s+dụng",
             r"(?i)dtsd:?(?:\s+\S+){0,5}?\s+(\d+(?:[.,]\d+)?)\s*m[²2]",
             r"(?i)(\d+(?:[.,]\d+)?)\s*m[²2](?:\s+\S+){0,5}?\s+dtsd",
-
         ]
 
         for pattern in patterns:
@@ -657,14 +638,12 @@ class DataCleaner:
                 num_val = None
 
         text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
-        short_address = row.get("short_address", "").lower().strip()
-        lat, lon = row.get("latitude", ""), row.get("longitude", "")
 
         if num_val is not None and num_val >= 50:
             return num_val
         elif pd.notna(text):
             # TH1: Nhà nằm trên mặt phố 
-            if DataCleaner.extract_street_or_alley_front(text, short_address, lat, lon) == "Mặt phố":
+            if DataCleaner.extract_street_or_alley_front(row) == "Mặt phố":
                 return 0 
             
             # TH2: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
