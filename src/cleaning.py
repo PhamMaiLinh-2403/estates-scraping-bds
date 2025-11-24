@@ -1,17 +1,12 @@
 import re
 import json
-import time 
 import pandas as pd
 import numpy as np
-import random
 import osmnx as ox
 import networkx as nx
-from rapidfuzz import fuzz, process
+from rapidfuzz import fuzz
 from rapidfuzz.fuzz import ratio
 from math import * 
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-from geopy.distance import geodesic
 
 from src.config import *
 
@@ -82,47 +77,6 @@ class DataCleaner:
 
         return cleaned
     
-    @staticmethod
-    def _is_on_main_road(text: str, short_address, lat, lon):
-        text = DataCleaner.clean_description_text(text.lower().strip())
-
-        # geolocator = Nominatim(user_agent="vn_address_distance")
-
-        not_on_main_road = r"mặt ngõ|mặt hẻm|gần phố|sát phố|nhà hẻm|nhà ngõ|ngõ vào|ngõ thông|hẻm vào|hẻm thông|hxh|hxt|(?<=\d)sẹc|(?<=\d)xẹt|hẻm|ngõ|ngách|kiệt ô tô|kiệt xe máy|kiệt(?<=\d)"
-        major_roads = 'đường|phố|mặt đường|mặt phố|mp|vành đai|đại lộ|đl|mặt tiền|mt|trục chính|quốc lộ|ql|qlo|tỉnh lộ|tl|ngã tư|ngã ba|ngã 4|ngã 3'
-        on_main_road = "\b(?:ngay|trên|nằm)?\s*(?:mặt tiền|mặt phố|mặt đường|phố|đường)\b"
-        distance_to_main_road = r"(?:vài\s*bước|[0-9]+\s*m|[0-9]+m|mấy\s*m|chỉ\s*\d+\s*m)(?:\s+\w+){0,3}\s+(?:ra|tới)\s+(?:mặt\s*tiền|đường|phố|đường\s+chính|mặt\s*phố)"
-
-        if re.search(not_on_main_road, text):
-            return "Mặt ngõ"
-        elif re.search(rf'(?:cách|ra|gần|sát)(?:\s+\w+){{0,5}}\s+(?:{major_roads})', text, re.IGNORECASE):
-            return "Mặt ngõ"
-        elif re.search(distance_to_main_road, text, re.IGNORECASE):
-            return "Mặt ngõ"
-        elif re.search(on_main_road, text, re.IGNORECASE):
-            return "Mặt phố"
-        # elif lat is not None and lon is not None:
-        #     lat, lon = float(lat), float(lon)
-        #     try:
-        #         location = geolocator.reverse((lat, lon), language="vi", timeout=10)
-        #         print(f"Successfully completed reverse geocoding for coordinates: ({lat}, {lon})")
-        #         time.sleep(random.uniform(1, 2))  
-
-        #         if location and location.address:
-        #             address = location.address.lower()
-        #             for loc in ["ngõ", "hẻm", "ngách"]:
-        #                 if loc in address:
-        #                     return "Mặt ngõ"
-                
-        #         if re.search(on_main_road, text) or "nhà phố" in text.lower():
-        #             return "Mặt phố"
-
-        #     except (GeocoderTimedOut, GeocoderServiceError, Exception) as e:
-        #         print(f"Reverse geocoding request failed for ({lat}, {lon}): {e}")
-        #         time.sleep(1) 
-
-        return None
-
     # -- Static Cleaning Methods -- 
     @staticmethod
     def extract_city(row):
@@ -249,7 +203,7 @@ class DataCleaner:
         ):
             return parts[0]
         
-        return DataCleaner._is_on_main_road(text, short_address, lat, lon)
+        return DataCleaner.extract_street_or_alley_front(text, short_address, lat, lon)
             
     @staticmethod
     def extract_total_area(row):
@@ -295,7 +249,7 @@ class DataCleaner:
             except (json.JSONDecodeError, IndexError, TypeError):
                 pass
 
-        if not price_str and pd.notna(row.get("other_info")): # Fallback to other_info if not found in main_info
+        if not price_str and pd.notna(row.get("other_info")): 
             try:
                 other_data = json.loads(row["other_info"])
                 for key, value in other_data.items():
@@ -423,14 +377,6 @@ class DataCleaner:
                 qual = re.search(pattern, text)
                 if qual:
                     return quality_val
-        #             ratio = fuzz.ratio(kw, qual.group(0).strip())
-        #             if quality_val == 0 or quality_val == 1:
-        #                 ratio += 3
-        #             result[quality_val] = [qual.group(0).strip(), ratio]
-        # if result:
-        #     # Sort by ratio first, then by quality value
-        #     best_quality, (match, score) = max(result.items(), key=lambda x: (x[1][1], x[0]))
-        #     return best_quality
         else:
             return default_quality
         
@@ -494,23 +440,6 @@ class DataCleaner:
                             if check_basement(description):
                                 return 12_848_184 # Biệt thự có hầm
                             return 10_510_920 # Biệt thự không hầm
-                    # for pattern in not_villa_pattern:
-                    #     if re.search(pattern, description):
-                    #         if row['Số tầng công trình'] == 2:
-                    #             if check_basement(description):
-                    #                 return 6_275_876 # Nhà 1 tầng 1 hầm
-                    #             else:
-                    #                 return 8_221_171 # Nhà 2 tầng không hầm
-                    #         if row['Số tầng công trình'] < 2:
-                    #             if check_basement(description):
-                    #                 return 6_275_876 # ví dụ như nhà 1.5 thì 0.5 đó chính là tầng hầm 
-                    #             return 8_221_171 # Nhà 2 tầng không hầm
-                    #         if check_basement(description):
-                    #             return 9504604 # Nhà hơn 2 tầng, có hầm
-                    #         return 8_221_171 # Nhà hơn 2 tầng, không hầm
-                    # if check_basement(description):
-                    #     return 12_848_184 # Biệt thự có hầm
-                    # return 10_510_920 # Biệt thự không hầm
 
                 # Nhà bê tông cốt thép
                 if row['Số tầng công trình'] == 2:
@@ -698,19 +627,6 @@ class DataCleaner:
                 continue
             else:
                 return ALLEY_WIDTH[pat]
-            
-    #     best_match = process.extractOne(
-    #     query=text,
-    #     choices=ALLEY_WIDTH.keys(),
-    #     scorer=fuzz.partial_ratio
-    # )
-    
-    #     if best_match:
-    #         matched_text, score, _ = best_match
-    #         if score >= 90: 
-    #             if re.search(rf'(?:cách|ra|\d+k?m?|tới)\s(?:\S+\s){{0,2}}{matched_text}', text, re.IGNORECASE):
-    #                 return None
-    #             return ALLEY_WIDTH[matched_text]
                 
         return None             
 
@@ -748,7 +664,7 @@ class DataCleaner:
             return num_val
         elif pd.notna(text):
             # TH1: Nhà nằm trên mặt phố 
-            if DataCleaner._is_on_main_road(text, short_address, lat, lon) == "Mặt phố":
+            if DataCleaner.extract_street_or_alley_front(text, short_address, lat, lon) == "Mặt phố":
                 return 0 
             
             # TH2: Cách đường bao nhiêu m/bao nhiêu mét ra mặt đường
@@ -1052,118 +968,6 @@ class DataImputer:
         
         # If length is not missing, or if it cannot be imputed, return the original value.
         return length 
-    
-    @staticmethod
-    def fill_missing_distance_to_the_main_road(df):
-        """
-        Fill missing values in 'Khoảng cách tới trục đường chính (m)' 
-        by computing the shortest path distance from each property to 
-        the nearest edge matching the main road name from OpenStreetMap.
-        """
-
-        target_col = "Khoảng cách tới trục đường chính (m)"
-        df_imputed = df.copy()
-        rows_to_impute = df_imputed[df_imputed[target_col].isna()].index
-
-        def has_name(x, name):
-            """Helper: check if an OSM edge name matches a given street name."""
-            if isinstance(x, list):
-                return name in x
-            return x == name
-
-        for idx in rows_to_impute:
-            row = df_imputed.loc[idx]
-            lat, lon = row.get("latitude"), row.get("longitude")
-            address = row.get("short_address")
-
-            if pd.isna(lat) or pd.isna(lon) or not address:
-                continue
-
-            # Extract street name (matches words after 'đường' or 'phố')
-            part = address.split(",")[0]
-            match = re.search(
-                r'\b(?:đường|phố)\s+[A-Za-zÀ-ỹà-ỹĐđ]+(?:\s+[A-Za-zÀ-ỹà-ỹĐđ]+)*',
-                part,
-                re.IGNORECASE,
-            )
-            if not match:
-                continue
-
-            street = match.group(0).strip()
-            print(f"[Row {idx}] Processing address: {address} | Street: {street}")
-
-            try:
-                # Load OSM graph around the property
-                G = ox.graph_from_point((lat, lon), dist=500, network_type="all")
-
-                # Project graph to local CRS (UTM) → distances now in meters
-                G_proj = ox.project_graph(G)
-
-                # Find nearest node to the property
-                orig_node = ox.distance.nearest_nodes(G_proj, lon, lat)
-
-                # Find edges that match the street name
-                def find_street_edges(name):
-                    return [
-                        (u, v, k)
-                        for u, v, k, data in G_proj.edges(keys=True, data=True)
-                        if data.get("name") and any(
-                            has_name(n, name)
-                            for n in (
-                                [data["name"]] if isinstance(data["name"], str) else data["name"]
-                            )
-                        )
-                    ]
-
-                street_edges = find_street_edges(street)
-
-                # Try alternate naming (e.g. remove or add prefixes)
-                if not street_edges:
-                    alt = street
-                    if street.lower().startswith("đường "):
-                        alt = street.replace("đường ", "", 1)
-                    elif street.lower().startswith("phố "):
-                        alt = street.replace("phố ", "", 1)
-                    else:
-                        alt = "đường " + street
-
-                    street_edges = find_street_edges(alt)
-
-                if not street_edges:
-                    print(f"[Row {idx}] No street match for: {street}")
-                    continue
-
-                # Pick the nearest street edge (Euclidean in projected CRS)
-                orig_x = G_proj.nodes[orig_node]["x"]
-                orig_y = G_proj.nodes[orig_node]["y"]
-
-                edge_centers = [
-                    (
-                        (G_proj.nodes[u]["x"] + G_proj.nodes[v]["x"]) / 2,
-                        (G_proj.nodes[u]["y"] + G_proj.nodes[v]["y"]) / 2,
-                        (u, v),
-                    )
-                    for u, v, k in street_edges
-                ]
-
-                edge_x, edge_y, (u, v) = min(
-                    edge_centers,
-                    key=lambda p: (orig_x - p[0]) ** 2 + (orig_y - p[1]) ** 2,
-                )
-
-                dest_node = ox.distance.nearest_nodes(G_proj, edge_x, edge_y)
-
-                # Compute the shortest path distance in meters
-                distance = nx.shortest_path_length(G_proj, orig_node, dest_node, weight="length")
-                df_imputed.loc[idx, target_col] = distance
-
-                print(f"[Row {idx}] Distance computed: {distance:.1f} m")
-
-            except Exception as e:
-                print(f"[Row {idx}] Error computing distance: {e}")
-                continue
-
-        return df_imputed
 
 
 class FeatureEngineer:
@@ -1238,7 +1042,6 @@ class FeatureEngineer:
         - If 'is_land' is True, uses a simple formula: Price / Area.
         - Otherwise, subtract building value from the price before dividing with area.
         """
-        # --- Use the temporary boolean flag ---  
         estimated_price = row.get('Giá ước tính')
         land_area = row.get('Diện tích đất (m2)')
         construction_cost_per_sqm = row.get('Đơn giá xây dựng')
@@ -1256,7 +1059,6 @@ class FeatureEngineer:
         building_value = construction_cost_per_sqm * total_floor_area * remaining_quality
 
         if building_value >= estimated_price:
-            # return round(estimated_price / land_area, 2)
             return None
 
         land_value = estimated_price - building_value
