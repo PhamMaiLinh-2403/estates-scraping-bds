@@ -203,7 +203,6 @@ def clean_details():
     final_df['Tọa độ (vĩ độ)'] = df['latitude']
     final_df['Tọa độ (kinh độ)'] = df['longitude']
     final_df['Hình ảnh của bài đăng'] = df['image_urls']
-    final_df['Mặt phố/Mặt ngõ'] = df['Mặt phố/Mặt ngõ']
 
     subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố',
     'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số tầng công trình',
@@ -211,7 +210,7 @@ def clean_details():
     'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất',
     'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)',
     'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 
-    'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)', 'Mặt phố/Mặt ngõ'
+    'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)'
 ]
 
     final_df.dropna(subset=subset, inplace=True)

@@ -168,7 +168,6 @@ class DataCleaner:
         Extract detailed address information (house number, alley, etc.).
         """
         short_address = str(row.get("short_address", "")).strip()
-        text = DataCleaner.clean_description_text(f"{row.get('title', '')} {row.get('description', '')}".lower().strip())
         parts = [p.strip() for p in short_address.split(",") if pd.notna(p) and isinstance(p, str)]
 
         address_details = []
