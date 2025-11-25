@@ -115,6 +115,7 @@ def clean_details():
         df['description'].str.contains(pattern, case=False, regex=True, na=False)
     )
     df = df[~mask]
+    df = df[~df['title'].str.contains('bán dãy nhà', case=False, na=False)]
 
     print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
 
@@ -150,7 +151,6 @@ def clean_details():
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
     df['title'] = df['title']
-    df['Mặt phố/Mặt ngõ'] = df.apply(DataCleaner.extract_street_or_alley_front, axis=1)
     
     # 2. Standardize addresses 
     print("Standardizing addresses...")
@@ -219,15 +219,67 @@ def clean_details():
     final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Successfully saved {len(final_df)} cleaned rows into {config.CLEANED_DETAILS_OUTPUT_FILE}")
 
+def clean_details_for_land():
+    """Step 3: Clean the data (for land )"""
+    if not os.path.exists(config.DETAILS_OUTPUT_FILE):
+        print("Details file not found. Run with `--mode details` first.")
+        return
+
+    df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
+    df.drop_duplicates()
+    df.dropna(subset=["title", "description"], inplace=True)
+    print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
+
+    # Initialize Address Standardizer
+    address_standardizer = AddressStandardizer(
+        provinces_sql_path=PROVINCES_SQL_FILE,
+        districts_sql_path=DISTRICTS_SQL_FILE,
+        wards_sql_path=WARDS_SQL_FILE,
+        streets_sql_path=STREETS_SQL_FILE,
+    )
+
+    # 1. Clean and structure the data 
+    print("Start extracting and cleaning raw data...")
+    df['Tỉnh/Thành phố'] = df.apply(DataCleaner.extract_city, axis=1)
+    df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(DataCleaner.extract_district, axis=1)
+    df['Xã/Phường/Thị trấn'] = df.apply(DataCleaner.extract_ward, axis=1)
+    df['Đường phố'] = df.apply(DataCleaner.extract_street, axis=1)
+    df['Chi tiết'] = df.apply(DataCleaner.extract_address_details, axis=1)
+    df['Thời điểm giao dịch/rao bán'] = df['main_info'].apply(DataCleaner.extract_published_date)
+    df['Giá rao bán/giao dịch'] = df.apply(DataCleaner.extract_price, axis=1)
+    # df['Số tầng công trình'] = df.apply(DataCleaner.extract_num_floors, axis=1)
+    df['Số mặt tiền tiếp giáp'] = df.apply(DataCleaner.extract_facade_count, axis=1)
+    # df['Hình dạng'] = df.apply(DataCleaner.extract_land_shape, axis=1)
+    # df['Chất lượng còn lại'] = df.apply(DataCleaner.estimate_remaining_quality, axis=1)
+    # df['Đơn giá xây dựng'] = df.apply(DataCleaner.extract_construction_cost, axis=1)
+    df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
+    # df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
+    # df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
+    # df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
+    # df['Diện tích xây dựng'] = df.apply(DataCleaner.extract_construction_area, axis=1)
+    # df['Tổng diện tích sàn'] = df.apply(DataCleaner.extract_building_area, axis=1)
+    # df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
+    # df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
+    df['description'] = df['description'].apply(DataCleaner.clean_description_text)
+    df['title'] = df['title']
+    df['Mặt phố/Mặt ngõ'] = df.apply(DataCleaner.extract_street_or_alley_front, axis=1)
+
+    # 2. Standardize addresses 
+    print("Standardizing addresses...")
+    df['Tỉnh/Thành phố'] = df['Tỉnh/Thành phố'].apply(address_standardizer.standardize_province)
+    df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(address_standardizer.standardize_district, axis=1)
+    df['Xã/Phường/Thị trấn'] = df.apply(address_standardizer.standardize_ward, axis=1)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Real‑estate scraper, cleaner & feature-engineering CLI")
     parser.add_argument(
         "--mode",
-        choices=["urls", "details", "clean"],
+        choices=["urls", "details", "clean", "clean_land"],
         required=True,
         help="'urls' → collect listing URLs\n"
              "'details' → scrape details from URLs\n"
              "'clean' → clean scraped data\n"
+             "'clean_land' → clean scraped data for land listings"
     )
     args = parser.parse_args()
 
@@ -237,3 +289,5 @@ if __name__ == "__main__":
         run_scrape_details()
     elif args.mode == "clean":
         clean_details()
+    elif args.mode == "clean_land":
+        clean_details_for_land()
