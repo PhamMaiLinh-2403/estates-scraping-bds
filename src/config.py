@@ -36,7 +36,7 @@ SCRAPING_DETAILS_CONFIG = {
 
 # Scraping configuration
 BASE_URL = "https://batdongsan.com.vn"
-SEARCH_PAGE_URL = f"{BASE_URL}/ban-nha-rieng"
+SEARCH_PAGE_URL = f"{BASE_URL}//ban-dat"
 PAGE_NUMBER = 1  # Starting page number for scraping
 
 # File path settings
