@@ -266,7 +266,6 @@ def clean_details_for_land():
     df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
     # df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
-    # df['Diện tích xây dựng'] = df.apply(DataCleaner.extract_construction_area, axis=1)
     df['Tổng diện tích sàn'] = ""
     df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
