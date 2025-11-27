@@ -51,10 +51,8 @@ class Scraper:
         self.driver = driver
 
     def scrape_listing_urls(self, search_page_url: str, page_number: int) -> list[str]:
-        """
-        Scrapes all listing URLs from a search results page by iterating through page numbers in the URL.
-        """
         urls = []
+        no_new_urls_count = 0  # Counter to count the number of empty pages 
 
         while True:
             # Construct URL for the current page
@@ -80,7 +78,6 @@ class Scraper:
 
             for link in links:
                 href = link.get_attribute("href")
-
                 if href:
                     full_url = config.BASE_URL + href if href.startswith("/") else href
                     if full_url not in urls:
@@ -88,9 +85,17 @@ class Scraper:
 
             print(f"Collected {len(urls)} unique URLs so far...")
 
+            # Check if new URLs were found
             if len(urls) == urls_before_scrape:
-                print("No new URLs found on this page. Reached end of pagination.")
-                break
+                no_new_urls_count += 1
+                print(f"No new URLs on this page. ({no_new_urls_count}/3)")
+
+                if no_new_urls_count >= 3:
+                    print("No new URLs on 3 consecutive pages. Ending pagination.")
+                    break
+            else:
+                # Reset counter if new URLs were found
+                no_new_urls_count = 0
 
             page_number += 1
 

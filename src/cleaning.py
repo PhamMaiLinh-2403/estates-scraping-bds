@@ -1051,3 +1051,16 @@ class FeatureEngineer:
         land_unit_price = land_value / land_area
 
         return round(land_unit_price, 2)
+    
+class LandCleaner:
+    @staticmethod
+    def get_land_shape(row):
+        text = f"{row.get('title', '')} {row.get('description', '')}".lower().strip()
+        text = DataCleaner.clean_description_text(text)
+
+        for shape, kws in SHAPE_KEYWORDS.items():
+            for kw in kws:
+                if re.search(r'\b' + re.escape(kw) + r'\b', text):
+                    if not DataCleaner._is_negated(text, kw):
+                        return shape
+        return None 

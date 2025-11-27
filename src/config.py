@@ -96,7 +96,7 @@ SHAPE_KEYWORDS = {
     # Most common/default shape, checked last.
     'Chữ nhật': [
         'vuông vức', 'vuông vắn', 'vuông đẹp',
-        'vuông như', 'hình chữ nhật', 'đều chằn chặn'
+        'vuông như', 'hình chữ nhật', 'đều chằn chặn', "không lỗi phong thủy"
     ]
 }
 
