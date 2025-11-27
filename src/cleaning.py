@@ -183,8 +183,8 @@ class DataCleaner:
             if any(re.match(rf"^{prefix}\s+\d+([a-z]*)\b", lower_part) for prefix in ignore_prefixes):
                 continue
 
-            if part.startswith(f"{ignore_prefixes}"):
-                continue 
+            if any(lower_part.startswith(prefix) for prefix in ignore_prefixes):
+                continue
 
             if re.search(r'\b(số|ngõ|hẻm|ngách|kiệt|tổ|khu phố|khu vực|khu đô thị|khu công nghiệp|kđt|khu dân cư|dự án)\b', lower_part):
                 address_details.append(part)
