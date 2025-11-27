@@ -78,7 +78,28 @@ class DataCleaner:
     @staticmethod
     def _have_buildings(row):
         text = (str(row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip())
+
+        phrases = ["có", "sẵn", "tặng"]
+        buildings = ["nhà", "xưởng", "villa", "biệt thự", "căn hộ", "khách sạn", "trọ", "văn phòng"]
+        combined = [f"{p} {b}" for p in phrases for b in buildings]
         
+        if "bán đất tặng nhà" in text:
+            return True 
+        elif "hiện trạng nhà" in text:
+            return True 
+        else:
+            for word in combined:
+                if word in text:
+                    return True
+                
+        negated_phrases = ["có thể", "phù hợp", "thích hợp", "giấy phép", "gpxd"]
+        actions = ["xây", "cất", "mở", "cải tạo", "làm"]
+        
+        for building in buildings:
+            if building in text:
+
+                
+        return False 
     
     # -- Static Cleaning Methods -- 
     @staticmethod
@@ -1055,8 +1076,7 @@ class FeatureEngineer:
 class LandCleaner:
     @staticmethod
     def get_land_shape(row):
-        text = f"{row.get('title', '')} {row.get('description', '')}".lower().strip()
-        text = DataCleaner.clean_description_text(text)
+        text = (row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip()
 
         for shape, kws in SHAPE_KEYWORDS.items():
             for kw in kws:
@@ -1064,3 +1084,8 @@ class LandCleaner:
                     if not DataCleaner._is_negated(text, kw):
                         return shape
         return None 
+    
+    @staticmethod
+    def get_building_info(row):
+        text = (row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip()
+        
