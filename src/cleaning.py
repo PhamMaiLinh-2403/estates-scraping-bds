@@ -75,6 +75,11 @@ class DataCleaner:
 
         return cleaned
     
+    @staticmethod
+    def _have_buildings(row):
+        text = (str(row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip())
+        
+    
     # -- Static Cleaning Methods -- 
     @staticmethod
     def extract_city(row):

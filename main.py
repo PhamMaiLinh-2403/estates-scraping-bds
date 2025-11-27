@@ -229,7 +229,7 @@ def clean_details_for_land():
     df.drop_duplicates()
     df.dropna(subset=["title", "description"], inplace=True)
 
-    pattern = r"bán\s+\w+\s+(lô đất|mảnh đất)"
+    pattern = r"bán\s+\w+\s+(lô|mảnh)"
 
     df = df[
         ~(
