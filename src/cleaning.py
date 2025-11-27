@@ -91,14 +91,7 @@ class DataCleaner:
             for word in combined:
                 if word in text:
                     return True
-                
-        negated_phrases = ["có thể", "phù hợp", "thích hợp", "giấy phép", "gpxd"]
-        actions = ["xây", "cất", "mở", "cải tạo", "làm"]
-        
-        for building in buildings:
-            if building in text:
-
-                
+                            
         return False 
     
     # -- Static Cleaning Methods -- 
