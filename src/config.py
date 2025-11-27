@@ -22,13 +22,13 @@ SELENIUM_CONFIG = {
 }
 
 # Concurrency settings
-MAX_WORKERS = 2
+MAX_WORKERS = 3
 
 # Scraping details configuration
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": True,
-    "start_index": 3001,
-    "count": 1000,
+    "start_index": 0,
+    "count": 2000,
     "stagger_mode": "random",
     "stagger_step_sec": 3.0,
     "stagger_max_sec": 3.0,

@@ -228,6 +228,16 @@ def clean_details_for_land():
     df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
     df.drop_duplicates()
     df.dropna(subset=["title", "description"], inplace=True)
+
+    pattern = r"bán\s+\w+\s+(lô đất|mảnh đất)"
+
+    df = df[
+        ~(
+            df['description'].str.contains(pattern, case=False, regex=True, na=False) |
+            df['title'].str.contains(pattern, case=False, regex=True, na=False)
+        )
+    ]
+
     print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
 
     # Initialize Address Standardizer
@@ -253,12 +263,12 @@ def clean_details_for_land():
     df['Chất lượng còn lại'] = ""
     df['Đơn giá xây dựng'] = ""
     df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
-    # df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
-    # df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
+    df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
+    df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
     # df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
     # df['Diện tích xây dựng'] = df.apply(DataCleaner.extract_construction_area, axis=1)
     df['Tổng diện tích sàn'] = ""
-    # df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
+    df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
     df['title'] = df['title']
