@@ -193,14 +193,14 @@ class DataCleaner:
             return ", ".join(address_details)
         elif (
             len(parts) > 3
-            and not parts[0].lower().startswith(f"{ignore_prefixes}")
+            and not any(parts[0].lower().startswith(prefix) for prefix in ignore_prefixes)
             and (
                 re.search(r'\b(hẻm|ngõ|ngách|kiệt|dự án|khu đô thị|kđt|khu dân cư|ấp|tổ|khu phố)\b', parts[0])
                 or re.search(r"\d+", parts[0])
             )
         ):
             return parts[0]
-        
+
         return DataCleaner.extract_street_or_alley_front(row)
             
     @staticmethod
