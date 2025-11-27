@@ -1082,3 +1082,4 @@ class LandCleaner:
     def get_building_info(row):
         text = (row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip()
         
+        
