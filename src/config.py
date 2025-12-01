@@ -107,7 +107,7 @@ QUALITY_LEVELS = [
         'đất nền', 'nhà tạm', 'chủ yếu lấy đất', 'tặng nhà'
         'có nhà nhưng không đáng giá', 'không tính giá trị nhà',
         'nhà cấp 4 cũ', 'nhà xuống cấp', 'giá trị đất là chính',
-        'bán đất', 'sắp sập'
+        'bán đất', 'sắp sập', "đập đi xây lại"
     ]),
     # Priority 2: Brand-new condition (100%)
     (1.0, [
