@@ -1064,7 +1064,7 @@ class LandCleaner:
         text = (row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip()
 
         phrases = ["có", "sẵn", "tặng"]
-        buildings = ["nhà", "xưởng", "villa", "biệt thự", "căn hộ", "khách sạn", "trọ", "văn phòng"]
+        buildings = ["nhà", "nc4", "xưởng", "villa", "biệt thự", "căn hộ", "khách sạn", "trọ", "văn phòng"]
         combined = [f"{p} {b}" for p in phrases for b in buildings]
         
         # Find combined phrase inside text
@@ -1092,34 +1092,10 @@ class LandCleaner:
         end_word_index = start_word_index + phrase_word_count + 5
         snippet = " ".join(words[start_word_index:end_word_index])
 
-        for building in buildings[1:]:
+        for building in buildings[2:]:
             if building in snippet: 
                 return 2 
-            elif "nhà" in snippet and "nhà xưởng" not in snippet and "nhà vườn" not in snippet:
+            elif ("nhà cấp 4" in snippet or "nhà c4" in snippet or "nc4") and "nhà xưởng" not in snippet and "nhà vườn" not in snippet:
                 return 1
             
         return 0 
-    
-    @staticmethod
-    def get_num_floors(row):
-        cleaned_text = (str(row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip())
-
-        # --- TH1: Extract from other_info ---
-        other_info = row.get("other_info", "")
-        if isinstance(other_info, str):
-            try:
-                other_info = json.loads(other_info)
-                ele = other_info.get("Số tầng")
-                if ele is not None:
-                    return int(re.search(r"\d+", ele).group())
-            except Exception:
-                pass
-        if isinstance(other_info, dict) and other_info.get("Số tầng"):
-            return int(other_info["Số tầng"].split()[0])
-
-        # --- TH2: Nhà cũ/nát hoặc nhà cấp 4 ---
-        if re.search(r'nhà cấp 4|nhà c4|cấp 4|nc4', cleaned_text):
-            return 1
-        
-        # --- TH3: Infer from text ---
-        
