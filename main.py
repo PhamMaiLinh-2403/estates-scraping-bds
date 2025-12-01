@@ -269,7 +269,7 @@ def clean_details_for_land():
     df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
     # df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
-    # df['Tổng diện tích sàn'] = ""
+    df['Tổng diện tích sàn'] = df.apply(DataCleaner.extract_building_area, axis=1) if df["land_category"] == 1 else 0 
     df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
@@ -307,10 +307,10 @@ def clean_details_for_land():
     final_df['Giá rao bán/giao dịch'] = df['Giá rao bán/giao dịch']
     final_df['Giá ước tính'] = df['Giá ước tính']
     final_df['Loại đơn giá (đ/m2 hoặc đ/m ngang)'] = 'đ/m2'  
-    # final_df['Đơn giá đất'] = df['Đơn giá đất']
-    # final_df['Lợi thế kinh doanh'] = df['Lợi thế kinh doanh']
+    final_df['Đơn giá đất'] = df['Đơn giá đất']
+    final_df['Lợi thế kinh doanh'] = df['Lợi thế kinh doanh']
     final_df['Số tầng công trình'] = df['Số tầng công trình']
-    # final_df['Tổng diện tích sàn'] = df['Tổng diện tích sàn']
+    final_df['Tổng diện tích sàn'] = df['Tổng diện tích sàn']
     final_df['Đơn giá xây dựng'] = df['Đơn giá xây dựng']
     final_df['Năm xây dựng'] = None 
     final_df['Chất lượng còn lại'] = df['Chất lượng còn lại']
