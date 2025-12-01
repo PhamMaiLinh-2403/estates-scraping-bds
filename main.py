@@ -238,6 +238,9 @@ def clean_details_for_land():
         )
     ]
 
+    df['land_category'] = df.apply(LandCleaner.categorize_lands, axis=1)
+    df = df[df['land_category'] != 2]
+
     print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
 
     # Initialize Address Standardizer
@@ -257,11 +260,11 @@ def clean_details_for_land():
     df['Chi tiết'] = df.apply(DataCleaner.extract_address_details, axis=1)
     df['Thời điểm giao dịch/rao bán'] = df['main_info'].apply(DataCleaner.extract_published_date)
     df['Giá rao bán/giao dịch'] = df.apply(DataCleaner.extract_price, axis=1)
-    # df['Số tầng công trình'] = ""
+    df['Số tầng công trình'] = 0 if df["land_category"] == 0 else 1 
     df['Số mặt tiền tiếp giáp'] = df.apply(DataCleaner.extract_facade_count, axis=1)
     df['Hình dạng'] = df.apply(LandCleaner.get_land_shape, axis=1)
-    # df['Chất lượng còn lại'] = ""
-    # df['Đơn giá xây dựng'] = ""
+    df['Chất lượng còn lại'] = df.apply(DataCleaner.estimate_remaining_quality, axis=1) if df["land_category"] == 1 else 0 
+    df['Đơn giá xây dựng'] = 4_000_000 if df["land_category"] == 1 else 0 
     df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
     df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
@@ -286,8 +289,8 @@ def clean_details_for_land():
     # 4. Create new features 
     print("Start feature engineeering...")
     df['Giá ước tính'] = df.apply(FeatureEngineer.calculate_estimated_price, axis=1)
-    # df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)
-    # df['Đơn giá đất'] = df.apply(FeatureEngineer.calculate_land_unit_price, axis=1)
+    df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)
+    df['Đơn giá đất'] = df.apply(FeatureEngineer.calculate_land_unit_price, axis=1)
 
     # 5. Structure the data into a final df
     print("Start structuring the data...")
@@ -306,11 +309,11 @@ def clean_details_for_land():
     final_df['Loại đơn giá (đ/m2 hoặc đ/m ngang)'] = 'đ/m2'  
     # final_df['Đơn giá đất'] = df['Đơn giá đất']
     # final_df['Lợi thế kinh doanh'] = df['Lợi thế kinh doanh']
-    # final_df['Số tầng công trình'] = df['Số tầng công trình']
+    final_df['Số tầng công trình'] = df['Số tầng công trình']
     # final_df['Tổng diện tích sàn'] = df['Tổng diện tích sàn']
-    # final_df['Đơn giá xây dựng'] = df['Đơn giá xây dựng']
+    final_df['Đơn giá xây dựng'] = df['Đơn giá xây dựng']
     final_df['Năm xây dựng'] = None 
-    # final_df['Chất lượng còn lại'] = df['Chất lượng còn lại']
+    final_df['Chất lượng còn lại'] = df['Chất lượng còn lại']
     final_df['Diện tích đất (m2)'] = df['Diện tích đất (m2)']
     final_df['Kích thước mặt tiền (m)'] = df['Kích thước mặt tiền (m)']
     final_df['Kích thước chiều dài (m)'] = df['Kích thước chiều dài (m)']
