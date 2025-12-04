@@ -268,7 +268,7 @@ def clean_details_for_land():
     df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
     df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
-    # df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
+    df['Mục đích sử dụng đất'] = df.apply(LandCleaner.get_land_use, axis=1)
     df['Tổng diện tích sàn'] = df.apply(DataCleaner.extract_building_area, axis=1) if df["land_category"] == 1 else 0 
     df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
@@ -321,7 +321,7 @@ def clean_details_for_land():
     final_df['Hình dạng'] = df['Hình dạng']
     final_df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df['Độ rộng ngõ/ngách nhỏ nhất (m)']
     final_df['Khoảng cách tới trục đường chính (m)'] = df['Khoảng cách tới trục đường chính (m)']
-    # final_df['Mục đích sử dụng đất'] = df['Mục đích sử dụng đất']
+    final_df['Mục đích sử dụng đất'] = df['Mục đích sử dụng đất']
     final_df['Yếu tố khác'] = df['description']
     final_df['Tọa độ (vĩ độ)'] = df['latitude']
     final_df['Tọa độ (kinh độ)'] = df['longitude']

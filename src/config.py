@@ -277,3 +277,22 @@ ALLEY_WIDTH = {
     "ngõ oto": 5.0,
     "ngõ o to": 5.0,
 }
+
+LAND_PURPOSE = ['đất trồng lúa|đất chuyên trồng lúa|đất lúa|đất (?:\S+\s){0,2}trồng cây hàng năm|đất (?:\S+\s){0,2}trồng cây hằng năm|(?:đất\s)?\W(?:luc|lua|lun|luk|lun|bhk|nhk|hnk|nkh)\W', # Đất trồng cây hằng năm
+                'đất (?:trồng\s)?cây lâu năm|đất cln|cây lâu năm|(?:đất\s)?(?:lnc|lnq|lnk)', # Đất trồng cây lâu năm
+                'đất trồng cây (?!hàng năm|hằng năm|lâu năm)|đất vườn', # Đất vườn
+                'đất rừng|(?:đất\s)?\W(?:rsx|rph|rdd|rsn|rst|rsm|rsk|rsm|rpn|rpt|rpk|rpm|rdn|rdt|rdk|rdm)\W', # Đất rừng
+                'đất nông nghiệp khác|đất nkh', # Đất nông nghiệp khác
+                'đất ở|thổ cư|full thổ|(?:đất\s)?\W(?:ont|odt)\W', # Đất ở
+                'đất khu công nghiệp|đất công nghiệp|đất kcn|đất (?:skk|skn|skt)', # Đất khu công nghiệp
+                'đất thương mại|đất tm\W|đất dịch vụ|đất dvu\W|đất dv\W|đất tmdv|đất kinh doanh|(?:đất\s)?\Wtmd\W', # Đất thương mại dịch vụ
+               ]
+LAND_PURPOSE_DICT = {'đất trồng lúa|đất chuyên trồng lúa|đất lúa|đất (?:\S+\s){0,2}trồng cây hàng năm|đất (?:\S+\s){0,2}trồng cây hằng năm|(?:đất\s)?\W(?:luc|lua|lun|luk|lun|bhk|nhk|hnk|nkh)\W': 'Đất trồng cây hàng năm', # Đất trồng cây hằng năm
+                'đất (?:trồng\s)?cây lâu năm|đất cln|cây lâu năm|(?:đất\s)?(?:lnc|lnq|lnk)': 'Đất trồng cây lâu năm', # Đất trồng cây lâu năm
+                'đất trồng cây\W(?!hàng năm|hằng năm|lâu năm)|đất vườn': 'Đất vườn', # Đất vườn
+                'đất rừng|(?:đất\s)?\W(?:rsx|rph|rdd|rsn|rst|rsm|rsk|rsm|rpn|rpt|rpk|rpm|rdn|rdt|rdk|rdm)\W': 'Đất rừng', # Đất rừng
+                'đất nông nghiệp khác|đất nkh': 'Đất nông nghiệp khác', # Đất nông nghiệp khác
+                'đất ở|thổ cư|full thổ|(?:đất\s)?\W(?:ont|odt)\W': 'Đất ở', # Đất ở
+                'đất khu công nghiệp|đất kcn|đất (?:skk|skn|skt)': 'Đất khu công nghiệp', # Đất khu công nghiệp
+                'đất thương mại|đất tm\W|đất dịch vụ|đất dvu\W|đất dv\W|đất tmdv|đất kinh doanh|(?:đất\s)?\Wtmd\W': 'Đất thương mại, dịch vụ', # Đất thương mại dịch vụ
+                }

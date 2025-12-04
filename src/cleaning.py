@@ -1099,3 +1099,33 @@ class LandCleaner:
                 return 1
             
         return 0 
+    
+    @staticmethod
+    def get_land_use(row):
+        text = (row.get('title') or '') + DataCleaner.clean_description_text(str(row.get('description') or '')).lower().strip()
+        num_pur = []
+
+        for pur in LAND_PURPOSE_DICT.keys():
+            search = re.search(pur, text)
+            if search:
+                if pur == 'Đất ở':
+                    new_pat = r'(?:gần|ra|giáp|sát|ngay|đối diện|phù hợp làm|phù hợp lên|chuyển đổi thành)\s' + rf'(?:{pur})'
+                else:
+                    new_pat = r'(?:gần|ra|giáp|sát|ngay|đối diện|phù hợp làm|phù hợp lên|chuyển đổi thành)\s' + rf'(?:{pur.replace("đất ", "")})'
+                if re.search(new_pat, text):
+                    continue
+                else:
+                    num_pur.append(LAND_PURPOSE_DICT[pur])
+
+        if len(num_pur) > 1:
+            return 'Mục đích sử dụng khác' 
+        if len(num_pur) == 1:
+            if num_pur[0] == 'Đất ở':
+                if re.search('đất ở đô thị|\Wodt\W', text):
+                    return 'Đất ở đô thị'
+                if re.search('Phường', row['short_address']):
+                    return 'Đất ở đô thị'
+            return f'{num_pur[0]}'
+        if re.search('Phường', row['short_address']):
+            return 'Đất ở đô thị'
+        return 'Đất ở'
