@@ -942,10 +942,13 @@ class DataImputer:
         if pd.isna(length):
             width = row.get("Kích thước mặt tiền (m)")
             construction_area = row.get('Diện tích xây dựng')
+            area = row.get("Diện tích đất (m2)")
             
             # Ensure both width and area are valid numbers before dividing
             if pd.notna(width) and width > 0 and pd.notna(construction_area):
                 return round(float(construction_area) / float(width), 2)
+            elif pd.notna(width) and width > 0 and pd.notna(area):
+                return round(float(area) / float(width), 2)
         
         # If length is not missing, or if it cannot be imputed, return the original value.
         return length 
