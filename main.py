@@ -1,6 +1,7 @@
 import argparse
 import os
 import threading
+import numpy as np 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
@@ -260,16 +261,24 @@ def clean_details_for_land():
     df['Chi tiết'] = df.apply(DataCleaner.extract_address_details, axis=1)
     df['Thời điểm giao dịch/rao bán'] = df['main_info'].apply(DataCleaner.extract_published_date)
     df['Giá rao bán/giao dịch'] = df.apply(DataCleaner.extract_price, axis=1)
-    df['Số tầng công trình'] = 0 if df["land_category"] == 0 else 1 
+    df['Số tầng công trình'] = np.where(df["land_category"] == 0, 0, 1)
     df['Số mặt tiền tiếp giáp'] = df.apply(DataCleaner.extract_facade_count, axis=1)
     df['Hình dạng'] = df.apply(LandCleaner.get_land_shape, axis=1)
-    df['Chất lượng còn lại'] = df.apply(DataCleaner.estimate_remaining_quality, axis=1) if df["land_category"] == 1 else 0 
-    df['Đơn giá xây dựng'] = 4_000_000 if df["land_category"] == 1 else 0 
+    df['Chất lượng còn lại'] = np.where(
+        df["land_category"] == 1,
+        df.apply(DataCleaner.estimate_remaining_quality, axis=1),
+        0
+    )
+    df['Đơn giá xây dựng'] = np.where(df["land_category"] == 1, 4_000_000, 0)
     df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
     df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
     df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
     df['Mục đích sử dụng đất'] = df.apply(LandCleaner.get_land_use, axis=1)
-    df['Tổng diện tích sàn'] = df.apply(DataCleaner.extract_building_area, axis=1) if df["land_category"] == 1 else 0 
+    df['Tổng diện tích sàn'] = np.where(
+        df["land_category"] == 1,
+        df.apply(DataCleaner.extract_building_area, axis=1),
+        0
+    )
     df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
