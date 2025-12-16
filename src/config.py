@@ -104,7 +104,7 @@ QUALITY_LEVELS = [
     # Priority 1: Structure has essentially no value (0%)
     (0.0, [
         'tặng nhà', 'bán đất tặng nhà', 'chỉ tính tiền đất',
-        'đất nền', 'nhà tạm', 'chủ yếu lấy đất', 'tặng nhà'
+        'đất nền', 'nhà tạm', 'chủ yếu lấy đất', 'tặng nhà',
         'có nhà nhưng không đáng giá', 'không tính giá trị nhà',
         'nhà cấp 4 cũ', 'nhà xuống cấp', 'giá trị đất là chính',
         'bán đất', 'sắp sập', "đập đi xây lại"

@@ -574,10 +574,7 @@ class DataCleaner:
             if match:
                 try:
                     result = float(match.group(1).replace(",", "."))
-                    if result >= row['Diện tích đất (m2)']:
-                        return result
-                    else:
-                        continue
+                    return result
                 except ValueError:
                     continue  
 
