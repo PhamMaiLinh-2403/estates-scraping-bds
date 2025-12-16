@@ -75,7 +75,7 @@ bandit.json
 # Project-specific
 output/
 *.csv
-*.xlsx
+# *.xlsx
 *.json
 secrets.json
 
@@ -100,3 +100,7 @@ output/
 output_old/
 output_27k/
 cleaned.xlsx
+data/
+output_nhadat/
+Dữ liệu thông tin kỹ thuật tài sản/
+Dữ liệu địa giới hành chính/phuongXa.xlsx
