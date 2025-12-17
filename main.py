@@ -201,16 +201,13 @@ def clean_details():
     final_df['Khoảng cách tới trục đường chính (m)'] = df['Khoảng cách tới trục đường chính (m)']
     final_df['Mục đích sử dụng đất'] = df['Mục đích sử dụng đất']
     final_df['Yếu tố khác'] = df['description']
+    final_df['Tiêu đề'] = df['title']
     final_df['Tọa độ (vĩ độ)'] = df['latitude']
     final_df['Tọa độ (kinh độ)'] = df['longitude']
     final_df['Hình ảnh của bài đăng'] = df['image_urls']
 
-    subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố',
-    'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số tầng công trình',
-    'Số mặt tiền tiếp giáp', 'Hình dạng', 'Chất lượng còn lại', 'Đơn giá xây dựng',
-    'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất',
-    'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)',
-    'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 
+    subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số tầng công trình', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Chất lượng còn lại', 'Đơn giá xây dựng',
+    'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất', 'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 
     'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)'
 ]
 
@@ -332,15 +329,12 @@ def clean_details_for_land():
     final_df['Khoảng cách tới trục đường chính (m)'] = df['Khoảng cách tới trục đường chính (m)']
     final_df['Mục đích sử dụng đất'] = df['Mục đích sử dụng đất']
     final_df['Yếu tố khác'] = df['description']
+    final_df['Tiêu đề'] = df['title']
     final_df['Tọa độ (vĩ độ)'] = df['latitude']
     final_df['Tọa độ (kinh độ)'] = df['longitude']
     final_df['Hình ảnh của bài đăng'] = df['image_urls']
 
-    subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố',
-    'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số mặt tiền tiếp giáp', 'Hình dạng', 
-    'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất',
-    'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Giá ước tính', 
-    'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)'
+    subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)'
 ]
 
     final_df.dropna(subset=subset, inplace=True)
