@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Data Scraper</title>
+        <style>
+            body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            }
+            label {
+                display: block;
+                margin-top: 15px;
+            }
+            button {
+                margin-top: 20px;
+                padding: 8px 16px;
+            }
+            #status {
+                margin-top: 20px;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <h2 style="text-align:center; font-size: 40px;">Web Scraping Request</h2>
+        <label for="web">Chọn web bạn muốn lấy thông tin</label> 
+        <br />
+        <select id="web" name="web" style="width:200px; height:40px; font-size:20px; font-family:Times New Roman;">
+            <option value="onehousing">Onehousing</option>
+            <option value="bds">Batdongsan.com</option>
+        </select>
+
+        <label for="date">Chọn ngày bắt đầu lấy thông tin</label>
+        <input type="date" id="date" name="date" style="width:200px; height:40px; font-size:20px; font-family:Times New Roman", min="2025-1-30" max='2025-12-31'>
+
+        <button onclick="submitJob()">Yêu cầu</button>
+
+        <div id="status"></div>
+
+        <script>
+        async function submitJob() {
+            const url = document.getElementById("web").value;
+            const statusDiv = document.getElementById("status");
+
+            if (!url) {
+                statusDiv.innerText = "Please enter a URL.";
+                return;
+            }
+
+            statusDiv.innerText = "Submitting job...";
+
+            try {
+                const response = await fetch("/scrape", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ target_url: url })
+                });
+
+                const data = await response.json();
+                statusDiv.innerHTML = `
+                    Job submitted.<br>
+                    Job ID: ${data.job_id}<br>
+                    <a href="/download/${data.job_id}">Download result</a>
+                `;
+            } catch (err) {
+                statusDiv.innerText = "Failed to submit job.";
+            }
+        }
+        </script>
+    </body>
+</html>

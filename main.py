@@ -1,20 +1,55 @@
 import argparse
 import os
 import threading
-import numpy as np 
+import numpy as np
+import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-import pandas as pd
-
-from src import config
+from src.config import * 
 from src.selenium_manager import *
-from src.config import *
-from src.scraping import Scraper
 from src.utils import *
 from src.cleaning import DataCleaner, DataImputer, FeatureEngineer, LandCleaner
 from src.address_standardizer import AddressStandardizer
+from src.scraping import Scraper
 
 
+# --- DATA SCHEMA ---
+FINAL_SCHEMA = {
+    "Tỉnh/Thành phố": "Tỉnh/Thành phố",
+    "Thành phố/Quận/Huyện/Thị xã": "Thành phố/Quận/Huyện/Thị xã",
+    "Xã/Phường/Thị trấn": "Xã/Phường/Thị trấn",
+    "Đường phố": "Đường phố",
+    "Chi tiết": "Chi tiết",
+    "Nguồn thông tin": "url",
+    "Tình trạng giao dịch": "status_const",
+    "Thời điểm giao dịch/rao bán": "Thời điểm giao dịch/rao bán",
+    "Thông tin liên hệ": "contact_const",
+    "Giá rao bán/giao dịch": "Giá rao bán/giao dịch",
+    "Giá ước tính": "Giá ước tính",
+    "Loại đơn giá (đ/m2 hoặc đ/m ngang)": "unit_type_const",
+    "Đơn giá đất": "Đơn giá đất",
+    "Lợi thế kinh doanh": "Lợi thế kinh doanh",
+    "Số tầng công trình": "Số tầng công trình",
+    "Tổng diện tích sàn": "Tổng diện tích sàn",
+    "Đơn giá xây dựng": "Đơn giá xây dựng",
+    "Năm xây dựng": "year_const",
+    "Chất lượng còn lại": "Chất lượng còn lại",
+    "Diện tích đất (m2)": "Diện tích đất (m2)",
+    "Kích thước mặt tiền (m)": "Kích thước mặt tiền (m)",
+    "Kích thước chiều dài (m)": "Kích thước chiều dài (m)",
+    "Số mặt tiền tiếp giáp": "Số mặt tiền tiếp giáp",
+    "Hình dạng": "Hình dạng",
+    "Độ rộng ngõ/ngách nhỏ nhất (m)": "Độ rộng ngõ/ngách nhỏ nhất (m)",
+    "Khoảng cách tới trục đường chính (m)": "Khoảng cách tới trục đường chính (m)",
+    "Mục đích sử dụng đất": "Mục đích sử dụng đất",
+    "Yếu tố khác": "description",
+    "Tọa độ (vĩ độ)": "latitude",
+    "Tọa độ (kinh độ)": "longitude",
+    "Hình ảnh của bài đăng": "image_urls",
+}
+
+
+# --- SCRAPING FUNCTIONS ---
 def run_scrape_urls():
     """Step 1: Scrape listing URLs from search pages."""
     driver = create_stealth_driver(headless=config.SELENIUM_CONFIG["headless"])
@@ -22,7 +57,6 @@ def run_scrape_urls():
     urls = scraper.scrape_listing_urls(config.SEARCH_PAGE_URL, config.PAGE_NUMBER)
     save_urls_to_csv(urls, config.URLS_OUTPUT_FILE)
     driver.quit()
-
 
 def run_scrape_details():
     """Step 2: Scrape detailed information for each URL."""
@@ -80,280 +114,132 @@ def run_scrape_details():
         print("Notifying all workers to shut down gracefully...")
         stop_event.set()
 
-        for fut, wid in futures.items():
-            if fut.done():
-                try:
-                    worker_details = fut.result()
-                    if worker_details:
-                        details_all.extend(worker_details)
-                    print(f"[Worker {wid}]: (post-interrupt) {len(worker_details or [])} listings scraped.")
-                except Exception as exc:
-                    print(f"[Worker {wid}]: (post-interrupt) raised {exc!r}")
-            else:
-                print(f"[Worker {wid}]: still running — results not collected.")
-
     finally:
         if details_all:
             save_details_to_csv(details_all, config.DETAILS_OUTPUT_FILE)
             print(f"\nSaved {len(details_all)} listings before exit.")
-        else:
-            print("\nNo data collected to save.")
 
 
-def clean_details():
-    """Step 3: Clean the scraped data."""
+# --- CLEANING FUNCTIONS ---
+def run_cleaning_pipeline(mode="house"):
+    """Step 3: Full cleaning pipeline for House and Land."""
     if not os.path.exists(config.DETAILS_OUTPUT_FILE):
-        print("Details file not found. Run with `--mode details` first.")
-        return
+        return print("Details file not found.")
 
-    df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
-    df.drop_duplicates()
+    print(f"Starting {mode} cleaning pipeline...")
+    df = pd.read_csv(config.DETAILS_OUTPUT_FILE).drop_duplicates()
     df.dropna(subset=["title", "description"], inplace=True)
 
-    pattern = r"bán\s*(?:\S+\s+){0,3}?([2-9]|\d{2,})\s+\S*\s*nhà"
-    mask = (
-        df['title'].str.contains(pattern, case=False, regex=True, na=False) |
-        df['description'].str.contains(pattern, case=False, regex=True, na=False)
+    # 1. Filtering
+    if mode == "house":
+        pattern = r"bán\s*(?:\S+\s+){0,3}?([2-9]|\d{2,})\s+\S*\s*nhà"
+        mask = df['title'].str.contains(pattern, case=False, regex=True, na=False) | \
+               df['description'].str.contains(pattern, case=False, regex=True, na=False)
+        df = df[~mask]
+        df = df[~df['title'].str.contains('bán dãy nhà', case=False, na=False)]
+
+    else: 
+        pattern = r"bán\s+\w+\s+(lô|mảnh)"
+        df = df[~(df['description'].str.contains(pattern, case=False, regex=True, na=False) | 
+                  df['title'].str.contains(pattern, case=False, regex=True, na=False))]
+        df['land_category'] = df.apply(LandCleaner.categorize_lands, axis=1)
+        df = df[df['land_category'] != 2]
+
+    print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")
+
+    # 2. Extraction & Cleaning
+    # Initialize standardizer 
+    standardizer = AddressStandardizer(
+        config.PROVINCES_SQL_FILE, config.DISTRICTS_SQL_FILE, 
+        config.WARDS_SQL_FILE, config.STREETS_SQL_FILE
     )
-    df = df[~mask]
-    df = df[~df['title'].str.contains('bán dãy nhà', case=False, na=False)]
 
-    print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
-
-    # Initialize Address Standardizer
-    address_standardizer = AddressStandardizer(
-        provinces_sql_path=PROVINCES_SQL_FILE,
-        districts_sql_path=DISTRICTS_SQL_FILE,
-        wards_sql_path=WARDS_SQL_FILE,
-        streets_sql_path=STREETS_SQL_FILE,
-    )
-
-    # 1. Clean and structure the data 
-    print("Start extracting and cleaning raw data...")
-    df['Tỉnh/Thành phố'] = df.apply(DataCleaner.extract_city, axis=1)
+    print("Extracting raw data...")
+    df['Tỉnh/Thành phố'] = df.apply(DataCleaner.extract_city, axis=1).apply(standardizer.standardize_province)
     df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(DataCleaner.extract_district, axis=1)
+    df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(standardizer.standardize_district, axis=1)
     df['Xã/Phường/Thị trấn'] = df.apply(DataCleaner.extract_ward, axis=1)
+    df['Xã/Phường/Thị trấn'] = df.apply(standardizer.standardize_ward, axis=1)
+    
     df['Đường phố'] = df.apply(DataCleaner.extract_street, axis=1)
     df['Chi tiết'] = df.apply(DataCleaner.extract_address_details, axis=1)
     df['Thời điểm giao dịch/rao bán'] = df['main_info'].apply(DataCleaner.extract_published_date)
     df['Giá rao bán/giao dịch'] = df.apply(DataCleaner.extract_price, axis=1)
-    df['Số tầng công trình'] = df.apply(DataCleaner.extract_num_floors, axis=1)
     df['Số mặt tiền tiếp giáp'] = df.apply(DataCleaner.extract_facade_count, axis=1)
-    df['Hình dạng'] = df.apply(DataCleaner.extract_land_shape, axis=1)
-    df['Chất lượng còn lại'] = df.apply(DataCleaner.estimate_remaining_quality, axis=1)
-    df['Đơn giá xây dựng'] = df.apply(DataCleaner.extract_construction_cost, axis=1)
     df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
     df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
-    df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
-    df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
-    df['Diện tích xây dựng'] = df.apply(DataCleaner.extract_construction_area, axis=1)
-    df['Tổng diện tích sàn'] = df.apply(DataCleaner.extract_building_area, axis=1)
     df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
     df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
     df['description'] = df['description'].apply(DataCleaner.clean_description_text)
-    df['title'] = df['title']
-    
-    # 2. Standardize addresses 
-    print("Standardizing addresses...")
-    df['Tỉnh/Thành phố'] = df['Tỉnh/Thành phố'].apply(address_standardizer.standardize_province)
-    df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(address_standardizer.standardize_district, axis=1)
-    df['Xã/Phường/Thị trấn'] = df.apply(address_standardizer.standardize_ward, axis=1)
 
-    # 3. Imputing missing values
-    print("Start imputing missing values...")
+    # Mode-specific column logic
+    if mode == "house":
+        df['Số tầng công trình'] = df.apply(DataCleaner.extract_num_floors, axis=1)
+        df['Hình dạng'] = df.apply(DataCleaner.extract_land_shape, axis=1)
+        df['Chất lượng còn lại'] = df.apply(DataCleaner.estimate_remaining_quality, axis=1)
+        df['Đơn giá xây dựng'] = df.apply(DataCleaner.extract_construction_cost, axis=1)
+        df['Mục đích sử dụng đất'] = df.apply(DataCleaner.extract_land_use, axis=1)
+        df['Tổng diện tích sàn'] = df.apply(DataCleaner.extract_building_area, axis=1)
+    else:
+        df['Số tầng công trình'] = np.where(df["land_category"] == 0, 0, 1)
+        df['Hình dạng'] = df.apply(LandCleaner.get_land_shape, axis=1)
+        df['Chất lượng còn lại'] = np.where(df["land_category"] == 1, df.apply(DataCleaner.estimate_remaining_quality, axis=1), 0)
+        df['Đơn giá xây dựng'] = np.where(df["land_category"] == 1, 4_000_000, 0)
+        df['Mục đích sử dụng đất'] = df.apply(LandCleaner.get_land_use, axis=1)
+        df['Tổng diện tích sàn'] = np.where(df["land_category"] == 1, df.apply(DataCleaner.extract_building_area, axis=1), 0)
+
+    # 3. Imputation & Feature Engineering
+    print("Running imputation and feature engineering...")
     df = DataImputer.fill_missing_width(df)
     df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
-
-    # 4. Create new features 
-    print("Start feature engineeering...")
     df['Giá ước tính'] = df.apply(FeatureEngineer.calculate_estimated_price, axis=1)
     df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)
     df['Đơn giá đất'] = df.apply(FeatureEngineer.calculate_land_unit_price, axis=1)
 
-    # 5. Structure the data into a final df
-    print("Start structuring the data...")
-    final_df = pd.DataFrame()
-    final_df['Tỉnh/Thành phố'] = df['Tỉnh/Thành phố']
-    final_df['Thành phố/Quận/Huyện/Thị xã'] = df['Thành phố/Quận/Huyện/Thị xã']
-    final_df['Xã/Phường/Thị trấn'] = df['Xã/Phường/Thị trấn']
-    final_df['Đường phố'] = df['Đường phố']
-    final_df['Chi tiết'] = df['Chi tiết']
-    final_df['Nguồn thông tin'] = df["url"]
-    final_df['Tình trạng giao dịch'] = 'Đang rao bán' 
-    final_df['Thời điểm giao dịch/rao bán'] = df['Thời điểm giao dịch/rao bán']
-    final_df['Thông tin liên hệ'] = None  
-    final_df['Giá rao bán/giao dịch'] = df['Giá rao bán/giao dịch']
-    final_df['Giá ước tính'] = df['Giá ước tính']
-    final_df['Loại đơn giá (đ/m2 hoặc đ/m ngang)'] = 'đ/m2'  
-    final_df['Đơn giá đất'] = df['Đơn giá đất']
-    final_df['Lợi thế kinh doanh'] = df['Lợi thế kinh doanh']
-    final_df['Số tầng công trình'] = df['Số tầng công trình']
-    final_df['Tổng diện tích sàn'] = df['Tổng diện tích sàn']
-    final_df['Đơn giá xây dựng'] = df['Đơn giá xây dựng']
-    final_df['Năm xây dựng'] = None 
-    final_df['Chất lượng còn lại'] = df['Chất lượng còn lại']
-    final_df['Diện tích đất (m2)'] = df['Diện tích đất (m2)']
-    final_df['Kích thước mặt tiền (m)'] = df['Kích thước mặt tiền (m)']
-    final_df['Kích thước chiều dài (m)'] = df['Kích thước chiều dài (m)']
-    final_df['Số mặt tiền tiếp giáp'] = df['Số mặt tiền tiếp giáp']
-    final_df['Hình dạng'] = df['Hình dạng']
-    final_df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df['Độ rộng ngõ/ngách nhỏ nhất (m)']
-    final_df['Khoảng cách tới trục đường chính (m)'] = df['Khoảng cách tới trục đường chính (m)']
-    final_df['Mục đích sử dụng đất'] = df['Mục đích sử dụng đất']
-    final_df['Yếu tố khác'] = df['description']
-    final_df['Tiêu đề'] = df['title']
-    final_df['Tọa độ (vĩ độ)'] = df['latitude']
-    final_df['Tọa độ (kinh độ)'] = df['longitude']
-    final_df['Hình ảnh của bài đăng'] = df['image_urls']
-
-    subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số tầng công trình', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Chất lượng còn lại', 'Đơn giá xây dựng',
-    'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất', 'Tổng diện tích sàn', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 
-    'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)'
-]
-
-    final_df.dropna(subset=subset, inplace=True)
+    # 4. Final Formatting using Schema
+    print("Finalizing structure...")
+    df['status_const'] = 'Đang rao bán'
+    df['contact_const'] = None
+    df['unit_type_const'] = 'đ/m2'
+    df['year_const'] = None
     
-    # Export the cleaned data 
-    final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
-    print(f"Successfully saved {len(final_df)} cleaned rows into {config.CLEANED_DETAILS_OUTPUT_FILE}")
+    # Rename and filter columns based on pre-defined schema 
+    final_df = df.rename(columns={v: k for k, v in FINAL_SCHEMA.items() if v in df.columns})
+    final_df = final_df[list(FINAL_SCHEMA.keys())]
 
-def clean_details_for_land():
-    """Step 3: Clean the data (for land )"""
-    if not os.path.exists(config.DETAILS_OUTPUT_FILE):
-        print("Details file not found. Run with `--mode details` first.")
-        return
-
-    df = pd.read_csv(config.DETAILS_OUTPUT_FILE)
-    df.drop_duplicates()
-    df.dropna(subset=["title", "description"], inplace=True)
-
-    pattern = r"bán\s+\w+\s+(lô|mảnh)"
-
-    df = df[
-        ~(
-            df['description'].str.contains(pattern, case=False, regex=True, na=False) |
-            df['title'].str.contains(pattern, case=False, regex=True, na=False)
-        )
-    ]
-
-    df['land_category'] = df.apply(LandCleaner.categorize_lands, axis=1)
-    df = df[df['land_category'] != 2]
-
-    print(f"After dropping NaN values and duplicates, there are {len(df)} rows of data in the dataset.")    
-
-    # Initialize Address Standardizer
-    address_standardizer = AddressStandardizer(
-        provinces_sql_path=PROVINCES_SQL_FILE,
-        districts_sql_path=DISTRICTS_SQL_FILE,
-        wards_sql_path=WARDS_SQL_FILE,
-        streets_sql_path=STREETS_SQL_FILE,
-    )
-
-    # 1. Clean and structure the data 
-    print("Start extracting and cleaning raw data...")
-    df['Tỉnh/Thành phố'] = df.apply(DataCleaner.extract_city, axis=1)
-    df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(DataCleaner.extract_district, axis=1)
-    df['Xã/Phường/Thị trấn'] = df.apply(DataCleaner.extract_ward, axis=1)
-    df['Đường phố'] = df.apply(DataCleaner.extract_street, axis=1)
-    df['Chi tiết'] = df.apply(DataCleaner.extract_address_details, axis=1)
-    df['Thời điểm giao dịch/rao bán'] = df['main_info'].apply(DataCleaner.extract_published_date)
-    df['Giá rao bán/giao dịch'] = df.apply(DataCleaner.extract_price, axis=1)
-    df['Số tầng công trình'] = np.where(df["land_category"] == 0, 0, 1)
-    df['Số mặt tiền tiếp giáp'] = df.apply(DataCleaner.extract_facade_count, axis=1)
-    df['Hình dạng'] = df.apply(LandCleaner.get_land_shape, axis=1)
-    df['Chất lượng còn lại'] = np.where(
-        df["land_category"] == 1,
-        df.apply(DataCleaner.estimate_remaining_quality, axis=1),
-        0
-    )
-    df['Đơn giá xây dựng'] = np.where(df["land_category"] == 1, 4_000_000, 0)
-    df['Diện tích đất (m2)'] = df.apply(DataCleaner.extract_total_area, axis=1)
-    df['Kích thước mặt tiền (m)'] = df.apply(DataCleaner.extract_width, axis=1)
-    df['Kích thước chiều dài (m)'] = df.apply(DataCleaner.extract_length, axis=1)
-    df['Mục đích sử dụng đất'] = df.apply(LandCleaner.get_land_use, axis=1)
-    df['Tổng diện tích sàn'] = np.where(
-        df["land_category"] == 1,
-        df.apply(DataCleaner.extract_building_area, axis=1),
-        0
-    )
-    df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df.apply(DataCleaner.extract_adjacent_lane_width, axis=1)
-    df['Khoảng cách tới trục đường chính (m)'] = df.apply(DataCleaner.extract_distance_to_the_main_road, axis=1)
-    df['description'] = df['description'].apply(DataCleaner.clean_description_text)
-    df['title'] = df['title']
-
-    # 2. Standardize addresses 
-    print("Standardizing addresses...")
-    df['Tỉnh/Thành phố'] = df['Tỉnh/Thành phố'].apply(address_standardizer.standardize_province)
-    df['Thành phố/Quận/Huyện/Thị xã'] = df.apply(address_standardizer.standardize_district, axis=1)
-    df['Xã/Phường/Thị trấn'] = df.apply(address_standardizer.standardize_ward, axis=1)
-
-    # 3. Imputing missing values
-    print("Start imputing missing values...")
-    df = DataImputer.fill_missing_width(df)
-    df['Kích thước chiều dài (m)'] = df.apply(DataImputer.fill_missing_length, axis=1)
-
-    # 4. Create new features 
-    print("Start feature engineeering...")
-    df['Giá ước tính'] = df.apply(FeatureEngineer.calculate_estimated_price, axis=1)
-    df['Lợi thế kinh doanh'] = df.apply(FeatureEngineer.calculate_business_advantage, axis=1)
-    df['Đơn giá đất'] = df.apply(FeatureEngineer.calculate_land_unit_price, axis=1)
-
-    # 5. Structure the data into a final df
-    print("Start structuring the data...")
-    final_df = pd.DataFrame()
-    final_df['Tỉnh/Thành phố'] = df['Tỉnh/Thành phố']
-    final_df['Thành phố/Quận/Huyện/Thị xã'] = df['Thành phố/Quận/Huyện/Thị xã']
-    final_df['Xã/Phường/Thị trấn'] = df['Xã/Phường/Thị trấn']
-    final_df['Đường phố'] = df['Đường phố']
-    final_df['Chi tiết'] = df['Chi tiết']
-    final_df['Nguồn thông tin'] = df["url"]
-    final_df['Tình trạng giao dịch'] = 'Đang rao bán' 
-    final_df['Thời điểm giao dịch/rao bán'] = df['Thời điểm giao dịch/rao bán']
-    final_df['Thông tin liên hệ'] = None  
-    final_df['Giá rao bán/giao dịch'] = df['Giá rao bán/giao dịch']
-    final_df['Giá ước tính'] = df['Giá ước tính']
-    final_df['Loại đơn giá (đ/m2 hoặc đ/m ngang)'] = 'đ/m2'  
-    final_df['Đơn giá đất'] = df['Đơn giá đất']
-    final_df['Lợi thế kinh doanh'] = df['Lợi thế kinh doanh']
-    final_df['Số tầng công trình'] = df['Số tầng công trình']
-    final_df['Tổng diện tích sàn'] = df['Tổng diện tích sàn']
-    final_df['Đơn giá xây dựng'] = df['Đơn giá xây dựng']
-    final_df['Năm xây dựng'] = None 
-    final_df['Chất lượng còn lại'] = df['Chất lượng còn lại']
-    final_df['Diện tích đất (m2)'] = df['Diện tích đất (m2)']
-    final_df['Kích thước mặt tiền (m)'] = df['Kích thước mặt tiền (m)']
-    final_df['Kích thước chiều dài (m)'] = df['Kích thước chiều dài (m)']
-    final_df['Số mặt tiền tiếp giáp'] = df['Số mặt tiền tiếp giáp']
-    final_df['Hình dạng'] = df['Hình dạng']
-    final_df['Độ rộng ngõ/ngách nhỏ nhất (m)'] = df['Độ rộng ngõ/ngách nhỏ nhất (m)']
-    final_df['Khoảng cách tới trục đường chính (m)'] = df['Khoảng cách tới trục đường chính (m)']
-    final_df['Mục đích sử dụng đất'] = df['Mục đích sử dụng đất']
-    final_df['Yếu tố khác'] = df['description']
-    final_df['Tiêu đề'] = df['title']
-    final_df['Tọa độ (vĩ độ)'] = df['latitude']
-    final_df['Tọa độ (kinh độ)'] = df['longitude']
-    final_df['Hình ảnh của bài đăng'] = df['image_urls']
-
-    subset = ['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Chi tiết', 'Thời điểm giao dịch/rao bán', 'Giá rao bán/giao dịch', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Mục đích sử dụng đất', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Giá ước tính', 'Lợi thế kinh doanh', 'Đơn giá đất', 'Nguồn thông tin', 'Tọa độ (vĩ độ)', 'Tọa độ (kinh độ)'
+    # Required subset for dropna
+    subset = [
+    'Tỉnh/Thành phố',
+    'Thành phố/Quận/Huyện/Thị xã',
+    'Xã/Phường/Thị trấn',
+    'Đường phố',
+    'Chi tiết',
+    'Thời điểm giao dịch/rao bán',
+    'Giá rao bán/giao dịch',
+    'Số mặt tiền tiếp giáp',
+    'Hình dạng',
+    'Diện tích đất (m2)',
+    'Kích thước mặt tiền (m)',
+    'Kích thước chiều dài (m)',
+    'Mục đích sử dụng đất',
+    'Độ rộng ngõ/ngách nhỏ nhất (m)',
+    'Khoảng cách tới trục đường chính (m)',
+    'Giá ước tính',
+    'Lợi thế kinh doanh',
+    'Đơn giá đất',
+    'Nguồn thông tin',
+    'Tọa độ (vĩ độ)',
+    'Tọa độ (kinh độ)',
 ]
-
     final_df.dropna(subset=subset, inplace=True)
-    
-    # Export the cleaned data 
     final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
-    print(f"Successfully saved {len(final_df)} cleaned rows into {config.CLEANED_DETAILS_OUTPUT_FILE}")
+    print(f"Cleaned {len(final_df)} rows. Saved to {config.CLEANED_DETAILS_OUTPUT_FILE}")
 
+
+# --- ENTRY POINT ---
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Real‑estate scraper, cleaner & feature-engineering CLI")
-    parser.add_argument(
-        "--mode",
-        choices=["urls", "details", "clean", "clean_land"],
-        required=True,
-        help="'urls' → collect listing URLs\n"
-             "'details' → scrape details from URLs\n"
-             "'clean' → clean scraped data\n"
-             "'clean_land' → clean scraped data for land listings"
-    )
+    parser = argparse.ArgumentParser(description="Real-estate Tool")
+    parser.add_argument("--mode", required=True, choices=["urls", "details", "clean", "clean_land"])
     args = parser.parse_args()
 
     if args.mode == "urls":
@@ -361,6 +247,6 @@ if __name__ == "__main__":
     elif args.mode == "details":
         run_scrape_details()
     elif args.mode == "clean":
-        clean_details()
+        run_cleaning_pipeline(mode="house")
     elif args.mode == "clean_land":
-        clean_details_for_land()
+        run_cleaning_pipeline(mode="land")
