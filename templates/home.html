@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Data Scraper</title>
+        <style>
+            body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            }
+            label {
+                display: block;
+                margin-top: 15px;
+            }
+            button {
+                margin-top: 20px;
+                padding: 8px 16px;
+            }
+            #status {
+                margin-top: 20px;
+                font-weight: bold;
+            }
+        </style>
+    </head>
+    <body>
+        <h2 style="text-align:center; font-size: 40px;">Web Scraping Request</h2>
+        
+        <form method="POST" action="/submit">
+            <label for="web">Chọn web bạn muốn lấy thông tin</label> 
+            <br />
+            <select id="web" name="web" style="width:200px; height:40px; font-size:20px; font-family:Times New Roman;">
+                <option value="Onehousing">Onehousing</option>
+                <option value="Batdongsan">Batdongsan.com</option>
+            </select>
+            <label for="start">Chọn thời gian bắt đầu lấy thông tin</label>
+            <br />
+            <input type="date" id="start" name="start_time" style="width:180px; height:35px; font-size:17px; font-family:Times New Roman">
+            <label for="end">Chọn thời gian kết thúc lấy thông tin</label>
+            <br />
+            <input type="date" id="end" name="end_time" style="width:180px; height:35px; font-size:17px; font-family:Times New Roman">
+            <br />
+            <button type="submit">Yêu cầu</button>
+        </form>
+
+        <script>
+            function formatDate(date) {
+                return date.toISOString().split("T")[0];
+            }
+
+            function setDateBounds() {
+                const today = new Date();
+
+                const sixtyDaysAgo = new Date();
+                sixtyDaysAgo.setDate(today.getDate() - 60);
+
+                const maxDate = formatDate(today);
+                const minDate = formatDate(sixtyDaysAgo);
+
+                document.getElementById("end").max = maxDate;
+                document.getElementById("start").min = minDate;
+                document.getElementById("start").max = maxDate;
+
+                const startInput = document.getElementById("start");
+                const endInput = document.getElementById("end");
+
+                startInput.addEventListener("change", () => {
+                    if (startInput.value) {
+                    endInput.min = startInput.value;
+
+                    // Optional auto-correction
+                    if (endInput.value && endInput.value < startInput.value) {
+                        endInput.value = startInput.value;
+                    }
+                    }
+                });
+            }
+
+            setDateBounds();
+        </script>
+
+        
+
+
+    </body>
+</html>
