@@ -3,18 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <title>Submission Result</title>
+    <style>
+        td {
+            border: 1px solid rgb(253, 253, 253);
+            border-collapse: collapse;
+            padding: 5px;
+            border-radius:10px;
+            background-color: aliceblue;
+            text-align: center;
+            font-size: 120%
+        }
+        th {
+            color:rgb(243, 250, 250);
+            font-size: 120%
+        }
+        table {
+            width: 90%;
+            height: 120px;
+            margin: 0 auto;
+            background-color:rgb(127, 202, 255);
+            padding: 10px;
+            border-radius:5px;
+        }
+        div.mycontainer {
+            width:80%;
+            overflow: auto;
+        }
+        div.mycontainer div {
+            float:left;
+        }
+    </style>
 </head>
 <body>
 
-<h2>Thông tin đã gửi</h2>
+<h2 style="font-size: 6vw; text-align:center">Yêu cầu đã được gửi tới hệ thống!</h2>
 
-<ul>
+<!-- <ul>
     <li><strong>Website:</strong> {{ web }}</li>
     <li><strong>Bắt đầu:</strong> {{ start_time }}</li>
     <li><strong>Kết thúc:</strong> {{ end_time }}</li>
-</ul>
+</ul> -->
+<!-- <div class="mycontainer">
+    <div style="background-color: yellow;width:30%">
+        <h4>Website:</h4>
+        <p>{{ web }}</p>
+    </div>
+    <div style="background-color: green;width:40%">
+        <h4>Thời gian yêu cầu:</h4>
+        <p>{{ start_time }} - {{ end_time }}</p>
+    </div>
+    <div style="background-color: rgb(84, 161, 229);width:30%">
+        <h4>Tên người gửi:</h4>
+        <p>{{ request_name }}</p>
+    </div>
+</div> -->
+<table >
+    <tr>
+        <th><strong>Web</strong></th>
+        <th><strong>Thời gian</strong></th>
+        <th><strong>Người gửi yêu cầu</strong></th>
+    </tr>
+    <tr>
+        <td>{{ web }}</td>
+        <td>{{ start_time }} - {{ end_time }}</td>
+        <td>{{ request_name }}</td>
+    </tr>
+</table>
+<br />
 
-<a href="/">Quay lại</a>
+<button><a href="/">Quay lại</a></button>
 
 </body>
 </html>

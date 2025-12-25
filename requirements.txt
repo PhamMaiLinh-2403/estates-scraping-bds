@@ -7,5 +7,6 @@ scikit-learn==1.7.1
 lightgbm==4.6.0
 rapidfuzz==3.14.1
 fastapi==0.121.1
+fastapi[standard]
 jinja2==3.1.6
 uvicorn==0.40.0
