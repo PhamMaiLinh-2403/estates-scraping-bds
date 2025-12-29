@@ -36,6 +36,7 @@
             display: flex;
             justify-content: center;
             margin-top: 16px;
+            gap: 10px
         }
 
         .btn {
@@ -44,6 +45,9 @@
             text-decoration: none;
             border-radius: 4px;
             color: black;
+            background-color: #eeeeee;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
         }
 
     </style>
@@ -85,11 +89,48 @@
 </table>
 <br />
 
-<p>{{ result_text }}</p>
+<p id="status" style="text-align: center; font-size: 2.5vw">{{ result_text }}</p>
 
-<!-- <button><a href="/" style="align-self: center; align-items: center; align-content: center;">Quay lại</a></button> -->
 <div class="button-container">
+    <a href="/download/{{ job_id }}?request_name={{ request_name }}" 
+    id="download" 
+    style="display:none"
+    class="btn">
+        Tải file xuống 
+    </a>
+
     <a href="/" class="btn">Quay lại</a>
 </div>
+
+
+<script>
+async function poll() {
+    const res = await fetch("/job/{{ job_id }}");
+    const job = await res.json();
+
+    if (job.status === "done") {
+        if (job.row_count > 0) {
+            // document.getElementById("status").innerText = ;
+            document.getElementById("download").style.display = "block";
+        // } else {
+        //     // document.getElementById("status").innerText = "Completed";
+        //     document.getElementById("empty-msg").style.display = "block";
+        }
+    } else if (job.status === "failed") {
+        document.getElementById("status").innerText = "Không có thông tin được thu thập trong thời gian này.";
+    } else {
+        setTimeout(poll, 2000);
+    }
+}
+poll();
+</script>
+
+<!-- <button><a href="/" style="align-self: center; align-items: center; align-content: center;">Quay lại</a></button> -->
+
+
+<!-- <div class="button-container">
+    <a href="/download/{{ job_id }}" class="btn">Tải file</a>
+</div> -->
+
 </body>
 </html>
