@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Query, Path, Form
 from fastapi.responses import HTMLResponse, StreamingResponse
 from io import StringIO
+import uuid
 from pydantic import BaseModel
 from typing import Annotated
 from fastapi.templating import Jinja2Templates
