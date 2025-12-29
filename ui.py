@@ -80,8 +80,6 @@ async def download(job_id: str):
 
     del RESULT_STORE[job_id]
 
-    print(RESULT_STORE)
-
     return StreamingResponse(
         buffer, 
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -94,7 +92,6 @@ def extract_data(start_date, end_date):
     df = pd.read_json(DATE_FILE, lines=True)
     df['start_time'] = pd.to_datetime(df['start_time'])
     df['end_time'] = pd.to_datetime(df['end_time'])
-    print(df)
     try:
         start_file_index = df[df['start_time'] <= start_date].index[-1]
         end_file_index = df[df['end_time'] >= end_date].index[0]
@@ -105,7 +102,6 @@ def extract_data(start_date, end_date):
          
         return_df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(return_df['Thời điểm giao dịch/rao bán'], dayfirst=True)
         return_df = return_df[(return_df['Thời điểm giao dịch/rao bán'] >= start_date) & (return_df['Thời điểm giao dịch/rao bán'] <= end_date)]
-        print(f'Shape after duplicates: {return_df.shape[0]}')
         return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Đơn giá xây dựng', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
         return_df['Thời điểm giao dịch/rao bán'] = return_df['Thời điểm giao dịch/rao bán'].dt.strftime("%d/%m/%Y")
     except:
