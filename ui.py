@@ -27,7 +27,7 @@ async def submit(
     web: str = Form(...),
     start_time: datetime = Form(...),
     end_time: datetime = Form(...),
-    request_name: str = Form(...)
+    # request_name: str = Form(...)
 ):
     start_time_display = start_time.strftime("%d/%m/%Y")
     end_time_display = end_time.strftime("%d/%m/%Y")
@@ -47,7 +47,7 @@ async def submit(
             "web": web,
             "start_time": start_time_display,
             "end_time": end_time_display,
-            "request_name": request_name,
+            # "request_name": request_name,
             "result_text": result_text,
             "job_id": job_id
             # "scraped_data": df
