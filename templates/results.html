@@ -32,6 +32,20 @@
         div.mycontainer div {
             float:left;
         }
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 16px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #333;
+            text-decoration: none;
+            border-radius: 4px;
+            color: black;
+        }
+
     </style>
 </head>
 <body>
@@ -57,7 +71,7 @@
         <p>{{ request_name }}</p>
     </div>
 </div> -->
-<table >
+<table>
     <tr>
         <th><strong>Web</strong></th>
         <th><strong>Thời gian</strong></th>
@@ -71,7 +85,11 @@
 </table>
 <br />
 
-<button><a href="/">Quay lại</a></button>
+<p>{{ result_text }}</p>
 
+<!-- <button><a href="/" style="align-self: center; align-items: center; align-content: center;">Quay lại</a></button> -->
+<div class="button-container">
+    <a href="/" class="btn">Quay lại</a>
+</div>
 </body>
 </html>

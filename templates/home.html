@@ -36,12 +36,16 @@
             <label for="start">Chọn thời gian bắt đầu lấy thông tin</label>
             <br />
             <input type="date" id="start" name="start_time" style="width:180px; height:35px; font-size:17px; font-family:Times New Roman">
+            <button type="button" onclick="resetField('start')">Đặt lại</button>
             <label for="end">Chọn thời gian kết thúc lấy thông tin</label>
             <br />
             <input type="date" id="end" name="end_time" style="width:180px; height:35px; font-size:17px; font-family:Times New Roman">
+            <button type="button" onclick="resetField('end')">Đặt lại</button>
             <br />
             <label for="request_name">Nhập tên người gửi yêu cầu</label>
             <input type="text" id="request_name" name="request_name" style="width:200px; height:35px; font-size:17px; font-family:Times New Roman">
+            <button type="button" onclick="resetField('request_name')">Đặt lại</button>
+            <br />
             <button type="submit">Yêu cầu</button>
         </form>
 
@@ -54,7 +58,7 @@
                 const today = new Date();
 
                 const sixtyDaysAgo = new Date();
-                sixtyDaysAgo.setDate(today.getDate() - 60);
+                sixtyDaysAgo.setDate(today.getDate() - 120);
 
                 const maxDate = formatDate(today);
                 const minDate = formatDate(sixtyDaysAgo);
@@ -79,6 +83,10 @@
             }
 
             setDateBounds();
+
+            function resetField(id) {
+                document.getElementById(id).value = "";
+            }
         </script>
 
         
