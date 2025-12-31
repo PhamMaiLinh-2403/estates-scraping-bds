@@ -90,14 +90,14 @@ async def download(job_id: str):
 # ------- Functions ------
 def extract_data(start_date, end_date):
     df = pd.read_json(DATE_FILE, lines=True)
-    df['start_time'] = pd.to_datetime(df['start_time'])
-    df['end_time'] = pd.to_datetime(df['end_time'])
+    df['start_time'] = pd.to_datetime(df['start_time'], dayfirst=True)
+    df['end_time'] = pd.to_datetime(df['end_time'], dayfirst=True)
     try:
         start_file_index = df[df['start_time'] <= start_date].index[-1]
         end_file_index = df[df['end_time'] >= end_date].index[0]
         return_df = pd.read_excel(OUTPUT_DIR + df.iloc[start_file_index]['file_dir'])
         for i in range(start_file_index + 1, end_file_index + 1):
-            new_df = pd.read_excel(OUTPUT_DIR + df.iloc[i]['file_dir'], encoding='utf-8')
+            new_df = pd.read_excel(OUTPUT_DIR + df.iloc[i]['file_dir'])
             return_df = pd.concat([return_df, new_df], ignore_index=True)
          
         return_df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(return_df['Thời điểm giao dịch/rao bán'], dayfirst=True)

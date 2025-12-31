@@ -3,6 +3,7 @@ import os
 import threading
 import numpy as np
 import pandas as pd
+import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.config import * 
@@ -232,6 +233,19 @@ def run_cleaning_pipeline(mode="house"):
     'Tọa độ (kinh độ)',
 ]
     final_df.dropna(subset=subset, inplace=True)
+
+    # final_df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(final_df['Thời điểm giao dịch/rao bán'], dayfirst=True)
+    # min_date = final_df['Thời điểm giao dịch/rao bán'].min().strftime('%d.%m.%Y')
+    # max_date = final_df['Thời điểm giao dịch/rao bán'].max().strftime('%d.%m.%Y')
+    # OUTPUT_NAME = f"{OUTPUT_DIR}/{min_date}-{max_date}.xlsx"
+    # final_df.to_excel(OUTPUT_NAME, index=False)
+    # print(f"Cleaned {len(final_df)} rows. Saved to {OUTPUT_NAME}")
+
+    # date_info = {"start_time": min_date, "end_time": max_date, "file_dir": OUTPUT_NAME}
+    # with open(DATE_FILE, 'a') as f:
+    #     f.write(json.dumps(date_info) + '\n')
+        
+
     final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Cleaned {len(final_df)} rows. Saved to {config.CLEANED_DETAILS_OUTPUT_FILE}")
 
