@@ -37,7 +37,7 @@ INFO_DATA_DIR = BASE_DIR / "Dữ liệu thông tin kỹ thuật tài sản"
 
 URLS_OUTPUT_FILE = OUTPUT_DIR / "listing_urls.csv"
 DETAILS_OUTPUT_FILE = OUTPUT_DIR / "listing_details.csv"
-DATE_FILE = OUTPUT_DIR / "date.jsonl"
+DATE_FILE = "date.jsonl"
 CLEANED_DETAILS_OUTPUT_FILE = OUTPUT_DIR / "listing_details_cleaned.xlsx"
 
 PROVINCES_SQL_FILE = ADMIN_DATA_DIR / "provinces_20250225_2.sql"

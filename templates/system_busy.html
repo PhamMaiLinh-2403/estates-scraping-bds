@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Busy</title>
+</head>
+<body>
+    <h2 id="status" style="text-align: center; font-size: 3vw;">Hệ thống đang lấy thêm thông tin, vui lòng quay lại sau...</h2>
+
+    <script>
+        const POLL_INTERVAL = 2 * 60 * 1000; // Chuyển ra miliseconds
+        async function pollStatus() {
+            const res = await fetch("/system-status");
+            const data = await res.json();
+
+            if (!data.running) {
+                document.getElementById("status").innerText =
+                    "Scraping đã hoàn tất. Đang quay lại trang chính...";
+
+                // Option A: auto redirect
+                setTimeout(() => {
+                    window.location.href = "/";
+                }, 2000);
+
+                // Option B (alternative): show reload button instead
+                // document.getElementById("reload").style.display = "block";
+            } else {
+                setTimeout(pollStatus, POLL_INTERVAL);
+            }
+        }
+
+        pollStatus();
+    </script>
+</body>
+</html>
