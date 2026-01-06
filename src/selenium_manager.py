@@ -55,3 +55,27 @@ def scrape_worker(worker_id: int, url_subset: list[str], existing_ids: set[str],
             time.sleep(delay)
     driver.quit()
     return results
+
+def scrape_urls_worker(worker_id: int, search_page_url: str, start_page: int, end_page: int, stop_event: threading.Event) -> list[str]:
+    """
+    Worker to scrape a range of pagination pages.
+    """
+    # Stagger start to prevent all browsers opening at exact same millisecond
+    time.sleep(worker_id * 2.0)
+    
+    print(f"[Worker {worker_id}] Starting URL scrape for pages {start_page} to {end_page}...")
+    
+    driver = create_stealth_driver(headless=config.SELENIUM_CONFIG["headless"])
+    scraper = Scraper(driver)
+    found_urls = []
+
+    try:
+        found_urls = scraper.scrape_listing_urls(search_page_url, start_page, end_page)
+        print(f"[Worker {worker_id}] Finished. Found {len(found_urls)} URLs.")
+        
+    except Exception as e:
+        print(f"[Worker {worker_id}] Critical Error: {e}")
+    finally:
+        driver.quit()
+
+    return found_urls

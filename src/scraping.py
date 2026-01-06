@@ -10,6 +10,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from . import config
+from .utils import * 
 
 
 def retry(max_tries=3, delay_seconds=3, backoff=2):
@@ -50,57 +51,59 @@ class Scraper:
         """Initializes the scraper with a Selenium WebDriver instance."""
         self.driver = driver
 
-    def scrape_listing_urls(self, search_page_url: str, page_number: int) -> list[str]:
-        urls = []
-        no_new_urls_count = 0  # Counter to count the number of empty pages 
+    def scrape_single_page(self, page_url: str) -> list[str]:
+        page_urls = []
+        print(f"Scraping page: {page_url}")
 
-        while True:
-            # Construct URL for the current page
-            if page_number == 1:
-                current_url = search_page_url
-            else:
-                base_search_url = search_page_url.rstrip('/')
-                current_url = f"{base_search_url}/p{page_number}"
+        try:
+            self.driver.get(page_url)
 
-            print(f"Scraping page {page_number}: {current_url}")
-            self.driver.get(current_url)
-
-            try:
-                WebDriverWait(self.driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "a.js__product-link-for-product-id"))
+            # Wait for elements to load
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "a.js__product-link-for-product-id")
                 )
-            except TimeoutException:
-                print(f"No product links found on page {page_number}. Assuming end of results.")
-                break
+            )
 
-            urls_before_scrape = len(urls)
-            links = self.driver.find_elements(By.CSS_SELECTOR, "a.js__product-link-for-product-id")
+            links = self.driver.find_elements(
+                By.CSS_SELECTOR, "a.js__product-link-for-product-id"
+            )
 
             for link in links:
                 href = link.get_attribute("href")
                 if href:
-                    full_url = config.BASE_URL + href if href.startswith("/") else href
-                    if full_url not in urls:
-                        urls.append(full_url)
+                    full_url = (
+                        config.BASE_URL + href if href.startswith("/") else href
+                    )
+                    page_urls.append(full_url)
 
-            print(f"Collected {len(urls)} unique URLs so far...")
+        except TimeoutException:
+            print(f"No products found on {page_url} (or timeout).")
+        except Exception as e:
+            print(f"Error scraping page {page_url}: {e}")
+        
+        return page_urls
 
-            # Check if new URLs were found
-            if len(urls) == urls_before_scrape:
-                no_new_urls_count += 1
-                print(f"No new URLs on this page. ({no_new_urls_count}/3)")
+    def scrape_listing_urls(self, search_page_url: str, start_page_number: int, end_page_number: int) -> list[str]:
+        """
+        Iterates through pagination and collects all product URLs.
+        """
+        all_urls = []
+        
+        for i in range(start_page_number, end_page_number + 1):
+            current_url = build_page_url(search_page_url, i)
+            
+            new_urls = self.scrape_single_page(current_url)
+            
+            if not new_urls:
+                print(f"No URLs found on page {i}. Stopping early.")
+                break
+                
+            all_urls.extend(new_urls)
+            print(f"Found {len(new_urls)} URLs on page {i}. Total: {len(all_urls)}")
 
-                if no_new_urls_count >= 3:
-                    print("No new URLs on 3 consecutive pages. Ending pagination.")
-                    break
-            else:
-                # Reset counter if new URLs were found
-                no_new_urls_count = 0
-
-            page_number += 1
-
-        return urls
-
+        return all_urls
+    
     @retry(max_tries=3, delay_seconds=5)
     def scrape_listing_details(self, url: str) -> dict | None:
         """

@@ -4,7 +4,8 @@ import threading
 import numpy as np
 import pandas as pd
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed 
 
 from src.config import * 
 from src.selenium_manager import *
@@ -52,15 +53,66 @@ FINAL_SCHEMA = {
 
 # --- SCRAPING FUNCTIONS ---
 def run_scrape_urls():
-    """Step 1: Scrape listing URLs from search pages."""
-    driver = create_stealth_driver(headless=config.SELENIUM_CONFIG["headless"])
-    scraper = Scraper(driver)
-    urls = scraper.scrape_listing_urls(config.SEARCH_PAGE_URL, config.PAGE_NUMBER)
-    save_urls_to_csv(urls, config.URLS_OUTPUT_FILE)
-    driver.quit()
+    """Step 1: Scrape listing URLs from search pages (Parallelized)."""
+    
+    start_page = config.START_PAGE_NUMBER
+    end_page = config.END_PAGE_NUMBER
+    max_workers = config.MAX_WORKERS
+    search_url = config.SEARCH_PAGE_URL
+
+    print(f"Preparing to scrape URLs from page {start_page} to {end_page} with {max_workers} workers.")
+
+    # 1. Calculate Ranges
+    page_ranges = split_page_ranges(start_page, end_page, max_workers)
+    
+    if not page_ranges:
+        print("Invalid page range or worker count.")
+        return
+
+    print(f"Work distribution: {page_ranges}")
+
+    # 2. Setup Multiprocessing
+    manager = multiprocessing.Manager()
+    stop_event = manager.Event()
+    all_urls = []
+
+    try:
+        with ProcessPoolExecutor(max_workers=len(page_ranges)) as pool:
+            futures = {
+                pool.submit(
+                    scrape_urls_worker, 
+                    wid, 
+                    search_url, 
+                    r_start, 
+                    r_end, 
+                    stop_event
+                ): wid
+                for wid, (r_start, r_end) in enumerate(page_ranges)
+            }
+
+            for fut in as_completed(futures):
+                wid = futures[fut]
+                try:
+                    urls = fut.result()
+                    if urls:
+                        all_urls.extend(urls)
+                    print(f"[Main] Worker {wid} returned {len(urls)} URLs.")
+                except Exception as exc:
+                    print(f"[Main] Worker {wid} generated an exception: {exc}")
+
+    except KeyboardInterrupt:
+        print("\n[Main] Interrupted! Stopping workers...")
+        stop_event.set()
+    
+    # 3. Save Results
+    # Remove duplicates just in case
+    unique_urls = list(set(all_urls))
+    print(f"Total unique URLs found: {len(unique_urls)}")
+    save_urls_to_csv(unique_urls, config.URLS_OUTPUT_FILE)
+
 
 def run_scrape_details():
-    """Step 2: Scrape detailed information for each URL."""
+    """Step 2: Scrape detailed information for each URL (Parallelized)."""
     if not os.path.exists(config.URLS_OUTPUT_FILE):
         print("URL file not found. Run with `--mode urls` first.")
         return
@@ -77,7 +129,7 @@ def run_scrape_details():
             existing_ids = set(df_existing['id'].dropna().astype(str).str.replace(r'\.0$', '', regex=True))
             print(f"Found {len(existing_ids)} existing listing IDs.")
         except Exception as e:
-            print(f"Warning: Could not read existing details file to check for duplicates. Error: {e}")
+            print(f"Warning: Could not read existing details file. {e}")
 
     start = config.SCRAPING_DETAILS_CONFIG["start_index"]
     count = config.SCRAPING_DETAILS_CONFIG["count"]
@@ -89,12 +141,16 @@ def run_scrape_details():
         return
 
     url_chunks = list(chunks(urls_to_scrape, max_workers))
-    print(f"Spawning {max_workers} workers (≈{[len(c) for c in url_chunks]} URLs per worker).")
+    print(f"Spawning {max_workers} workers.")
+    
     details_all = []
-    stop_event = threading.Event()
+    
+    # CHANGED: Use Manager and ProcessPoolExecutor
+    manager = multiprocessing.Manager()
+    stop_event = manager.Event()
 
     try:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
             futures = {
                 pool.submit(scrape_worker, wid, subset, existing_ids, stop_event): wid
                 for wid, subset in enumerate(url_chunks)
@@ -106,19 +162,18 @@ def run_scrape_details():
                     worker_details = fut.result()
                     if worker_details:
                         details_all.extend(worker_details)
-                    print(f"[Worker {wid}]: {len(worker_details or [])} listings scraped.")
+                    print(f"[Main] Worker {wid} finished. Collected {len(worker_details or [])} listings.")
                 except Exception as exc:
-                    print(f"[Worker {wid}]: raised {exc!r}")
+                    print(f"[Main] Worker {wid} raised {exc!r}")
 
     except KeyboardInterrupt:
         print("\n Scraping interrupted by user (Ctrl+C).")
-        print("Notifying all workers to shut down gracefully...")
         stop_event.set()
 
     finally:
         if details_all:
             save_details_to_csv(details_all, config.DETAILS_OUTPUT_FILE)
-            print(f"\nSaved {len(details_all)} listings before exit.")
+            print(f"\nSaved {len(details_all)} listings.")
 
 
 # --- CLEANING FUNCTIONS ---
