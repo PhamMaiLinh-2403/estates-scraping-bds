@@ -15,11 +15,10 @@ SELENIUM_CONFIG = {
 }
 
 # --- SCRAPER SETTINGS ---
-MAX_WORKERS = 3
-BASE_URL = "https://batdongsan.com.vn"
-
+MAX_WORKERS = 12
 # Urls configuration
-SEARCH_PAGE_URL = f"{BASE_URL}/ban-dat"
+BASE_URL = "https://batdongsan.com.vn"
+SEARCH_PAGE_URL = f"{BASE_URL}/ban-nha-rieng"
 START_PAGE_NUMBER = 1
 END_PAGE_NUMBER = 3000
 
