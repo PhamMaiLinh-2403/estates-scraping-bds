@@ -1,9 +1,7 @@
 import argparse
 import os
-import threading
 import numpy as np
 import pandas as pd
-import json
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed 
 
@@ -112,7 +110,7 @@ def run_scrape_urls():
 
 
 def run_scrape_details():
-    """Step 2: Scrape detailed information for each URL (Parallelized)."""
+    """Step 2: Scrape detailed information for each URL (Parallelized) with Temp File Merging."""
     if not os.path.exists(config.URLS_OUTPUT_FILE):
         print("URL file not found. Run with `--mode urls` first.")
         return
@@ -143,37 +141,49 @@ def run_scrape_details():
     url_chunks = list(chunks(urls_to_scrape, max_workers))
     print(f"Spawning {max_workers} workers.")
     
-    details_all = []
+    # Ensure Temp Directory Exists
+    os.makedirs(config.TEMP_OUTPUT_DIR, exist_ok=True)
     
-    # CHANGED: Use Manager and ProcessPoolExecutor
     manager = multiprocessing.Manager()
     stop_event = manager.Event()
 
     try:
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            # Pass temp_dir path to workers
             futures = {
-                pool.submit(scrape_worker, wid, subset, existing_ids, stop_event): wid
+                pool.submit(
+                    scrape_worker, 
+                    wid, 
+                    subset, 
+                    existing_ids, 
+                    stop_event, 
+                    config.TEMP_OUTPUT_DIR
+                ): wid
                 for wid, subset in enumerate(url_chunks)
             }
 
             for fut in as_completed(futures):
                 wid = futures[fut]
                 try:
-                    worker_details = fut.result()
-                    if worker_details:
-                        details_all.extend(worker_details)
-                    print(f"[Main] Worker {wid} finished. Collected {len(worker_details or [])} listings.")
+                    temp_file = fut.result()
+                    print(f"[Main] Worker {wid} finished writing to {temp_file}.")
                 except Exception as exc:
                     print(f"[Main] Worker {wid} raised {exc!r}")
 
     except KeyboardInterrupt:
-        print("\n Scraping interrupted by user (Ctrl+C).")
+        print("\n[Main] Scraping interrupted by user (Ctrl+C). Stopping workers...")
         stop_event.set()
+        # Allow a moment for workers to close files safely if possible
+        pass
 
     finally:
-        if details_all:
-            save_details_to_csv(details_all, config.DETAILS_OUTPUT_FILE)
-            print(f"\nSaved {len(details_all)} listings.")
+        print("\n[Main] Merging temporary files...")
+        merge_temp_files(
+            config.TEMP_OUTPUT_DIR, 
+            config.DETAILS_OUTPUT_FILE, 
+            append_mode=config.SCRAPING_DETAILS_CONFIG["append_mode"]
+        )
+        print("[Main] Process finished.")
 
 
 # --- CLEANING FUNCTIONS ---
@@ -288,19 +298,7 @@ def run_cleaning_pipeline(mode="house"):
     'Tọa độ (kinh độ)',
 ]
     final_df.dropna(subset=subset, inplace=True)
-
-    # final_df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(final_df['Thời điểm giao dịch/rao bán'], dayfirst=True)
-    # min_date = final_df['Thời điểm giao dịch/rao bán'].min().strftime('%d.%m.%Y')
-    # max_date = final_df['Thời điểm giao dịch/rao bán'].max().strftime('%d.%m.%Y')
-    # OUTPUT_NAME = f"{OUTPUT_DIR}/{min_date}-{max_date}.xlsx"
-    # final_df.to_excel(OUTPUT_NAME, index=False)
-    # print(f"Cleaned {len(final_df)} rows. Saved to {OUTPUT_NAME}")
-
-    # date_info = {"start_time": min_date, "end_time": max_date, "file_dir": OUTPUT_NAME}
-    # with open(DATE_FILE, 'a') as f:
-    #     f.write(json.dumps(date_info) + '\n')
         
-
     final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Cleaned {len(final_df)} rows. Saved to {config.CLEANED_DETAILS_OUTPUT_FILE}")
 

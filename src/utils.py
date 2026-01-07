@@ -1,5 +1,6 @@
 import csv
 import pandas as pd
+import shutil
 from pathlib import Path
 from typing import List, Any, Union
 from src import config
@@ -46,6 +47,77 @@ def save_to_csv(data: List[Any], file_path: Union[str, Path], is_url_list: bool 
         )
 
     print(f"{'Appended' if mode == 'a' else 'Saved'} {len(data)} records to {path}")
+
+def save_batch(data: List[dict], file_path: Path):
+    """
+    Appends a batch of data to a specific temp file.
+    Creates the file and writes the header if it doesn't exist.
+    """
+    if not data:
+        return
+
+    file_exists = file_path.exists()
+    
+    try:
+        df = pd.DataFrame(data)
+        df.to_csv(
+            file_path,
+            mode='a',
+            header=not file_exists, # Write header only if file didn't exist
+            index=False,
+            quoting=csv.QUOTE_ALL,
+            encoding='utf-8'
+        )
+    except Exception as e:
+        print(f"Error saving batch to {file_path}: {e}")
+
+def merge_temp_files(temp_dir: Path, output_file: Path, append_mode: bool = True):
+    """
+    Consolidates all CSV files in temp_dir into output_file and deletes temp_dir.
+    """
+    temp_files = list(temp_dir.glob("*.csv"))
+    if not temp_files:
+        print("No temp files to merge.")
+        return
+
+    print(f"Merging {len(temp_files)} temp files into {output_file}...")
+    
+    ensure_dir(output_file)
+    
+    # Check if target exists to decide on header
+    target_exists = output_file.exists() and append_mode
+    write_header = not target_exists
+    
+    total_records = 0
+    
+    try:
+        # Iterate over temp files and append them to the main file
+        for i, temp_file in enumerate(temp_files):
+            try:
+                df_chunk = pd.read_csv(temp_file, on_bad_lines='skip')
+                
+                if not df_chunk.empty:
+                    df_chunk.to_csv(
+                        output_file,
+                        mode='a',
+                        header=write_header,
+                        index=False,
+                        quoting=csv.QUOTE_ALL,
+                        encoding='utf-8'
+                    )
+                    total_records += len(df_chunk)
+                    write_header = False # Only write headers on the first time 
+            except Exception as e:
+                print(f"Failed to merge temp file {temp_file}: {e}")
+        
+        print(f"Successfully merged {total_records} records.")
+        
+        # Cleanup
+        shutil.rmtree(temp_dir)
+        print(f"Cleaned up temp directory: {temp_dir}")
+        
+    except Exception as e:
+        print(f"Critical error during merge: {e}")
 
 def chunks(iterable, n):
     """Split iterable into n roughly equal chunks."""

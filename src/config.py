@@ -35,6 +35,7 @@ SCRAPING_DETAILS_CONFIG = {
 # --- FILE & DIRECTORY PATHS ---
 BASE_DIR = Path(__file__).parent.parent
 OUTPUT_DIR = BASE_DIR / "output"
+TEMP_OUTPUT_DIR = OUTPUT_DIR / "temp_chunks" 
 ADMIN_DATA_DIR = BASE_DIR / "Dữ liệu địa giới hành chính"
 INFO_DATA_DIR = BASE_DIR / "Dữ liệu thông tin kỹ thuật tài sản"
 
