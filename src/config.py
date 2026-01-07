@@ -2,7 +2,7 @@ from pathlib import Path
 
 # --- BROWSER CONFIGURATION ---
 SELENIUM_CONFIG = {
-    "headless": False,
+    "headless": True,
     "uc_driver": True,
     "window_size": "1920,1080",
     "args": [
