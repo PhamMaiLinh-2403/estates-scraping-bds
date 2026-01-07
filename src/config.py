@@ -26,7 +26,7 @@ END_PAGE_NUMBER = 3000
 SCRAPING_DETAILS_CONFIG = {
     "append_mode": True,
     "start_index": 0,
-    "count": 3000,
+    "count": 0,
     "stagger_mode": "random",
     "stagger_step_sec": 3.0,
     "stagger_max_sec": 3.0,
