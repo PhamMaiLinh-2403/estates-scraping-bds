@@ -10,7 +10,7 @@
     <h2 id="status" style="text-align: center; font-size: 3vw;">Hệ thống đang lấy thêm thông tin, vui lòng quay lại sau...</h2>
 
     <script>
-        const POLL_INTERVAL = 2 * 60 * 1000; // Chuyển ra miliseconds
+        const POLL_INTERVAL = 30 * 60 * 1000; // Chuyển ra miliseconds
         async function pollStatus() {
             const res = await fetch("/system-status");
             const data = await res.json();

@@ -2,6 +2,7 @@ import argparse
 import os
 import numpy as np
 import pandas as pd
+import json
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed 
 
@@ -297,9 +298,28 @@ def run_cleaning_pipeline(mode="house"):
     'Tọa độ (vĩ độ)',
     'Tọa độ (kinh độ)',
 ]
+    # Drop duplicates
+    old_size = final_df.shape[0]
+    final_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Đơn giá xây dựng', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
+    print(f'Dropped {old_size - final_df.shape[0]} duplicates')
+
+    # Save file without dropping NaN values
+    final_df['Time'] = pd.to_datetime(final_df['Thời điểm giao dịch/rao bán'], dayfirst=True)
+    min_date = final_df['Time'].min().strftime('%d.%m.%Y')
+    max_date = final_df['Time'].max().strftime('%d.%m.%Y')
+    final_df.drop(columns='Time', inplace=True)
+    OUTPUT_NAME = f"{OUTPUT_DIR}/{min_date}-{max_date}.xlsx"
+    OUTPUT_NAME_RAW = f"{OUTPUT_DIR}/{min_date}-{max_date}_raw.xlsx"
+    final_df.to_excel(OUTPUT_NAME_RAW, index=False)
+    print(f"Cleaned {len(final_df)} rows. Saved to {OUTPUT_NAME_RAW}")
+
     final_df.dropna(subset=subset, inplace=True)
+    final_df.to_excel(OUTPUT_NAME, index=False)
+    date_info = {"start_time": min_date, "end_time": max_date, "file_dir": OUTPUT_NAME}
+    with open(DATE_FILE, 'a') as f:
+        f.write(json.dumps(date_info) + '\n')
         
-    final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
+    # final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
     print(f"Cleaned {len(final_df)} rows. Saved to {config.CLEANED_DETAILS_OUTPUT_FILE}")
 
 

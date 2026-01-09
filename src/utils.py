@@ -103,7 +103,7 @@ def merge_temp_files(temp_dir: Path, output_file: Path, append_mode: bool = True
                         header=write_header,
                         index=False,
                         quoting=csv.QUOTE_ALL,
-                        encoding='utf-8'
+                        encoding='utf-8-sig'
                     )
                     total_records += len(df_chunk)
                     write_header = False # Only write headers on the first time 

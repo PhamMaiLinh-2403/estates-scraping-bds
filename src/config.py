@@ -2,7 +2,7 @@ from pathlib import Path
 
 # --- BROWSER CONFIGURATION ---
 SELENIUM_CONFIG = {
-    "headless": False,
+    "headless": True,
     "uc_driver": True,
     "window_size": "1920,1080",
     "args": [
@@ -15,7 +15,7 @@ SELENIUM_CONFIG = {
 }
 
 # --- SCRAPER SETTINGS ---
-MAX_WORKERS = 12
+MAX_WORKERS = 4
 # Urls configuration
 BASE_URL = "https://batdongsan.com.vn"
 SEARCH_PAGE_URL = f"{BASE_URL}/ban-nha-rieng"
