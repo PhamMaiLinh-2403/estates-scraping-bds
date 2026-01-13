@@ -281,20 +281,24 @@ def run_cleaning_pipeline(mode="house"):
     'Xã/Phường/Thị trấn',
     'Đường phố',
     'Chi tiết',
+    'Nguồn thông tin', 
     'Thời điểm giao dịch/rao bán',
     'Giá rao bán/giao dịch',
-    'Số mặt tiền tiếp giáp',
-    'Hình dạng',
+    'Giá ước tính',
+    'Đơn giá đất',
+    'Lợi thế kinh doanh',
+    'Số tầng công trình', 
+    'Tổng diện tích sàn', 
+    'Đơn giá xây dựng',
+    'Chất lượng còn lại',
     'Diện tích đất (m2)',
     'Kích thước mặt tiền (m)',
     'Kích thước chiều dài (m)',
-    'Mục đích sử dụng đất',
+    'Số mặt tiền tiếp giáp',
+    'Hình dạng',
     'Độ rộng ngõ/ngách nhỏ nhất (m)',
     'Khoảng cách tới trục đường chính (m)',
-    'Giá ước tính',
-    'Lợi thế kinh doanh',
-    'Đơn giá đất',
-    'Nguồn thông tin',
+    'Mục đích sử dụng đất',
     'Tọa độ (vĩ độ)',
     'Tọa độ (kinh độ)',
 ]
@@ -316,11 +320,11 @@ def run_cleaning_pipeline(mode="house"):
     final_df.dropna(subset=subset, inplace=True)
     final_df.to_excel(OUTPUT_NAME, index=False)
     date_info = {"start_time": min_date, "end_time": max_date, "file_dir": OUTPUT_NAME}
-    with open(DATE_FILE, 'a') as f:
+    with open('output/Batdongsan/date.jsonl', 'a') as f:
         f.write(json.dumps(date_info) + '\n')
         
     # final_df.to_excel(config.CLEANED_DETAILS_OUTPUT_FILE, index=False)
-    print(f"Cleaned {len(final_df)} rows. Saved to {config.CLEANED_DETAILS_OUTPUT_FILE}")
+    print(f"Cleaned {len(final_df)} rows. Saved to {OUTPUT_NAME}")
 
 
 # --- ENTRY POINT ---
