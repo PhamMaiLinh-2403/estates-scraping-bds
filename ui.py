@@ -14,6 +14,7 @@ import traceback
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import pytz
+import sqlite3
 from main import run_scrape_urls,run_scrape_details, run_cleaning_pipeline
 from src.config import *
 
@@ -123,44 +124,69 @@ async def download(job_id: str):
         })
 
 # ------- Functions ------
+# def extract_data(start_date, end_date, web):
+#     date_file = f'{OUTPUT_DIR}/{web}/{DATE_FILE}'
+#     print(date_file)
+#     df = pd.read_json(date_file, lines=True)
+#     df['start_time'] = pd.to_datetime(df['start_time'], dayfirst=True)
+#     df['end_time'] = pd.to_datetime(df['end_time'], dayfirst=True)
+#     try:
+#         start_file_index = df[df['start_time'] <= start_date].index[-1]
+#         print(f'Start file index: {start_file_index}')
+#         end_file_index = df[df['end_time'] >= end_date].index[0]
+#         print(f'End file index: {end_file_index}')
+#         print(f'{OUTPUT_DIR}/{web}/{df.iloc[start_file_index]["file_dir"]}')
+#         return_df = pd.read_excel(f'{OUTPUT_DIR}/{web}/{df.iloc[start_file_index]["file_dir"]}')
+#         print(f'Return df shape:{return_df.shape[0]}')
+
+#         for i in range(start_file_index + 1, end_file_index + 1):
+#             new_df = pd.read_excel(f'{OUTPUT_DIR}/{web}/{df.iloc[i]["file_dir"]}')
+#             return_df = pd.concat([return_df, new_df], ignore_index=True)
+        
+#         print("We're here")
+        
+#         if web == 'Batdongsan':
+#             return_df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(return_df['Thời điểm giao dịch/rao bán'], dayfirst=True)
+#             return_df = return_df[(return_df['Thời điểm giao dịch/rao bán'] >= start_date) & (return_df['Thời điểm giao dịch/rao bán'] <= end_date)]
+#             return_df['Thời điểm giao dịch/rao bán'] = return_df['Thời điểm giao dịch/rao bán'].dt.strftime("%d/%m/%Y")
+#             return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Đơn giá xây dựng', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
+#         else:
+#             print("We're here")
+#             print(return_df.shape[0])
+#             print(return_df.columns)
+#             return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
+#         # return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Đơn giá xây dựng', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
+        
+#     except:
+#         print("File not found")
+#         return_df = pd.DataFrame()
+#     return return_df
+
 def extract_data(start_date, end_date, web):
-    date_file = f'{OUTPUT_DIR}/{web}/{DATE_FILE}'
-    print(date_file)
-    df = pd.read_json(date_file, lines=True)
-    df['start_time'] = pd.to_datetime(df['start_time'], dayfirst=True)
-    df['end_time'] = pd.to_datetime(df['end_time'], dayfirst=True)
-    try:
-        start_file_index = df[df['start_time'] <= start_date].index[-1]
-        print(f'Start file index: {start_file_index}')
-        end_file_index = df[df['end_time'] >= end_date].index[0]
-        print(f'End file index: {end_file_index}')
-        print(f'{OUTPUT_DIR}/{web}/{df.iloc[start_file_index]["file_dir"]}')
-        return_df = pd.read_excel(f'{OUTPUT_DIR}/{web}/{df.iloc[start_file_index]["file_dir"]}')
-        print(f'Return df shape:{return_df.shape[0]}')
+    with sqlite3.connect('output/scraped_data.db') as conn:
+        cursor = conn.cursor()
 
-        for i in range(start_file_index + 1, end_file_index + 1):
-            new_df = pd.read_excel(f'{OUTPUT_DIR}/{web}/{df.iloc[i]["file_dir"]}')
-            return_df = pd.concat([return_df, new_df], ignore_index=True)
+        sql_statement = """
+                        SELECT *
+                        FROM nharieng
+                        WHERE
+                        date(
+                            substr("Thời điểm giao dịch/rao bán", 7, 4) || '-' ||
+                            substr("Thời điểm giao dịch/rao bán", 4, 2) || '-' ||
+                            substr("Thời điểm giao dịch/rao bán", 1, 2)
+                        )
+                        BETWEEN date(?) AND date(?)
+                        """
         
-        print("We're here")
-        
-        if web == 'Batdongsan':
-            return_df['Thời điểm giao dịch/rao bán'] = pd.to_datetime(return_df['Thời điểm giao dịch/rao bán'], dayfirst=True)
-            return_df = return_df[(return_df['Thời điểm giao dịch/rao bán'] >= start_date) & (return_df['Thời điểm giao dịch/rao bán'] <= end_date)]
-            return_df['Thời điểm giao dịch/rao bán'] = return_df['Thời điểm giao dịch/rao bán'].dt.strftime("%d/%m/%Y")
-            return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Đơn giá xây dựng', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
-        else:
-            print("We're here")
-            print(return_df.shape[0])
-            print(return_df.columns)
-            return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
-        # return_df.drop_duplicates(subset=['Tỉnh/Thành phố', 'Thành phố/Quận/Huyện/Thị xã', 'Xã/Phường/Thị trấn', 'Đường phố', 'Giá rao bán/giao dịch', 'Giá ước tính', 'Đơn giá đất', 'Lợi thế kinh doanh', 'Số tầng công trình', 'Tổng diện tích sàn', 'Đơn giá xây dựng', 'Chất lượng còn lại', 'Diện tích đất (m2)', 'Kích thước mặt tiền (m)', 'Kích thước chiều dài (m)', 'Số mặt tiền tiếp giáp', 'Hình dạng', 'Độ rộng ngõ/ngách nhỏ nhất (m)', 'Khoảng cách tới trục đường chính (m)', 'Mục đích sử dụng đất'], inplace=True)
-        
-    except:
-        print("File not found")
-        return_df = pd.DataFrame()
+        cursor.execute(
+            sql_statement,
+            (start_date, end_date)
+        )
+
+        rows = cursor.fetchall()
+
+    return_df = pd.DataFrame(rows, columns=[column[0] for column in cursor.description])
     return return_df
-
 # def test_auto():
 #     scrape_state["running"] = True
 #     print("Start testing")
